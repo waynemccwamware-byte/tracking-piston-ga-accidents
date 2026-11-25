@@ -66,6 +66,7 @@ body{
 .purpose-line{ font-size:12.5px; color:var(--teal); margin:4px 4px 10px; line-height:1.5; }
 .purpose-label{ color:var(--text-primary); }
 .xlink{ display:flex; justify-content:flex-end; margin:-4px 4px 10px; }
+.xbtn{ padding:7px 12px; font-size:12.5px; display:inline-block; text-decoration:none; }   /* same as GA Accident Stats' .tail-top button */
 
 .panel{ background:var(--bg-panel); border:1px solid var(--bezel); border-radius:10px; padding:12px; }
 .step{ border:1px solid var(--bezel); border-radius:8px; padding:12px; margin-bottom:12px; background:rgba(16,20,26,0.35); }
@@ -363,10 +364,10 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.7</span>
+    <span class="ver mono">v0.8</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
-  <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
+  <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
 
   <div class="panel">
 
@@ -517,7 +518,7 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters') || '{}'); } catch (e) { return {}; } })();
 const st = { cases: [], sev: saved0.sev || 'all', fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
   view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
-  q: '', shown: 40, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
+  q: '', shown: 20, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
 const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
 const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state }));
 const famOf = c => c.fam || OTHER;
@@ -611,7 +612,7 @@ function render() {
 
 $('sevSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  st.sev = b.dataset.v; st.shown = 40; keepFilters(); syncSegs(); render();
+  st.sev = b.dataset.v; st.shown = 20; keepFilters(); syncSegs(); render();
 });
 
 function syncSegs() {
@@ -643,7 +644,7 @@ function renderPick() {
     <div class="pick-foot"><span>${st.fams.length ? `${st.fams.length} type${st.fams.length === 1 ? '' : 's'} selected: ${esc(st.fams.join(', '))}` : 'All types shown.'}</span><button type="button" class="btn sm primary" data-done>Done</button></div></div>`;
   $('famPanel').querySelectorAll('input[data-mixed]').forEach(x => { x.indeterminate = true; });
 }
-function famsChanged() { st.shown = 40; keepFilters(); famSummary(); renderPick(); render(); }
+function famsChanged() { st.shown = 20; keepFilters(); famSummary(); renderPick(); render(); }
 function famSummary() {
   const q = Object.values(QUICK).find(([, fn]) => st.fams.length && sameSet(st.fams, fn()));
   $('famSum').textContent = !st.fams.length ? 'All types' : q ? q[0] : st.fams.length === 1 ? st.fams[0] : `${st.fams.length} types`;
@@ -663,9 +664,9 @@ $('famPanel').addEventListener('change', e => {
   }
   famsChanged();
 });
-$('stSel').onchange = e => { st.state = e.target.value; st.shown = 40; keepFilters(); render(); };
-$('q').oninput = e => { st.q = e.target.value; st.shown = 40; render(); };
-$('moreBtn').onclick = () => { st.shown += 40; render(); };
+$('stSel').onchange = e => { st.state = e.target.value; st.shown = 20; keepFilters(); render(); };
+$('q').oninput = e => { st.q = e.target.value; st.shown = 20; render(); };
+$('moreBtn').onclick = () => { st.shown += 20; render(); };
 $('list').addEventListener('click', async e => {
   const cl = e.target.closest('[data-close]');
   if (cl) { if (st.view === 'short') st.open.delete(cl.dataset.close); else st.open.add('-' + cl.dataset.close); render(); return; }
