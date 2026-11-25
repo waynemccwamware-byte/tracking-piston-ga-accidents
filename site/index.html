@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Tracking Piston GA Accidents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-deep:#10141a;
+  --bg-panel:#1b222c;
+  --bezel:#2a323f;
+  --bezel-hi:#3a4454;
+  --amber:#f5a623;
+  --amber-dim:#7a5a1e;
+  --amber-glow:rgba(245,166,35,0.35);
+  --text-primary:#e7e4dc;
+  --text-muted:#8b93a1;
+  --teal:#3fa7a0;
+  --focus:#f5a623;
+  --alert:#e0705f;
+  /* app-specific: severity marks */
+  --sev-serious:#e0a05f;
+}
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top, 0px);
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+}
+*,*::before,*::after{ box-sizing:inherit; }
+html{
+  background:var(--bg-deep);
+  overscroll-behavior:none;
+  scroll-padding-top:env(safe-area-inset-top, 0px);
+  color-scheme:dark;
+}
+body{
+  margin:0;
+  min-height:100vh;
+  overscroll-behavior:none;
+  background:radial-gradient(ellipse at 50% 0%, #171d26 0%, var(--bg-deep) 60%);
+  font-family:'IBM Plex Sans', sans-serif;
+  color:var(--text-primary);
+  padding:6px 12px 40px;   /* little air above the title (Wayne, 25-Nov-2026) */
+}
+.mono{ font-family:'IBM Plex Mono', monospace; }
+.rig{ width:100%; max-width:780px; margin:0 auto; }
+
+.btn{
+  font:500 13px 'IBM Plex Sans', sans-serif; padding:10px 16px; border-radius:6px;
+  border:1px solid var(--bezel-hi); background:transparent; color:var(--text-muted); cursor:pointer;
+  transition:color .15s ease, border-color .15s ease;
+}
+.btn:hover{ color:var(--amber); border-color:var(--amber); }
+.btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+.btn.primary{ color:var(--amber); border-color:var(--amber-dim); background:rgba(245,166,35,0.08); }
+.btn.sm{ padding:6px 11px; font-size:12px; }
+.btn:disabled{ opacity:.45; cursor:default; }
+
+.title-row{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px; padding:0 4px; }
+.title-row h1{ font-size:19px; font-weight:600; margin:0; letter-spacing:0.01em; }
+.title-row .ver{ font-size:11px; color:var(--text-muted); }
+.purpose-line{ font-size:12.5px; color:var(--teal); margin:4px 4px 10px; line-height:1.5; }
+.purpose-label{ color:var(--text-primary); }
+.xlink{ display:flex; justify-content:flex-end; margin:-4px 4px 10px; }
+
+.panel{ background:var(--bg-panel); border:1px solid var(--bezel); border-radius:10px; padding:12px; }
+.step{ border:1px solid var(--bezel); border-radius:8px; padding:12px; margin-bottom:12px; background:rgba(16,20,26,0.35); }
+.step:last-child{ margin-bottom:0; }
+.step h2{ font-size:13.5px; font-weight:600; margin:0 0 8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.step h2 .num{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--amber); border:1px solid var(--amber-dim); border-radius:4px; padding:1px 5px; }
+.step h2 .sub{ font-weight:400; font-size:11.5px; color:var(--text-muted); }
+.note{ font-size:12px; color:var(--text-muted); line-height:1.5; margin:6px 0; }
+.note b{ color:var(--text-primary); font-weight:500; }
+.fine{ font-size:11px; color:var(--text-muted); line-height:1.5; margin:12px 4px 0; }
+
+.seg{ display:inline-flex; border:1px solid var(--bezel-hi); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+.seg button{ font:500 12px 'IBM Plex Sans',sans-serif; background:transparent; color:var(--text-muted); border:0; padding:7px 10px; cursor:pointer; border-right:1px solid var(--bezel-hi); }
+.seg button:last-child{ border-right:0; }
+.seg button[aria-pressed="true"]{ color:var(--amber); background:rgba(245,166,35,0.10); }
+.seg button:focus-visible{ outline:2px solid var(--amber); outline-offset:-2px; }
+
+.ctls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; }
+select, input[type=text], input[type=email]{
+  font:13px 'IBM Plex Sans',sans-serif; color:var(--text-primary); background:#0d1117;
+  border:1px solid var(--bezel-hi); border-radius:6px; padding:7px 9px; min-width:0;
+}
+select:focus, input:focus{ outline:2px solid var(--amber); outline-offset:0; border-color:transparent; }
+input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
+
+.status{ font-size:11.5px; color:var(--text-muted); margin:0 0 8px; }
+.status .bad{ color:var(--alert); }
+
+.list{ display:flex; flex-direction:column; gap:6px; }
+.acc{ border:1px solid var(--bezel); border-left:3px solid var(--bezel-hi); border-radius:6px; padding:8px 10px; background:#151b23; }
+.acc.fatal{ border-left-color:var(--alert); }
+.acc.serious{ border-left-color:var(--sev-serious); }
+.acc.hl{ outline:2px solid var(--amber); }
+.acc-top{ display:flex; justify-content:space-between; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.acc-ac{ font-weight:600; font-size:13.5px; }
+.acc-ac .reg{ font-family:'IBM Plex Mono',monospace; font-weight:500; color:var(--amber); margin-left:6px; }
+.acc-date{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-muted); }
+.acc-mid{ font-size:12.5px; margin-top:3px; color:var(--text-primary); }
+.inj{ font-weight:500; }
+.inj.fatal{ color:var(--alert); }
+.inj.serious{ color:var(--sev-serious); }
+.acc-meta{ font-size:11.5px; color:var(--text-muted); margin-top:3px; }
+.acc-links{ display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:6px; font-size:12px; align-items:center; }
+.acc-links a{ color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(63,167,160,.35); }
+.acc-links a:hover{ color:var(--amber); border-bottom-color:var(--amber); }
+.watch-btn{ all:unset; cursor:pointer; color:var(--text-muted); font-size:12px; border:1px solid var(--bezel-hi); border-radius:12px; padding:2px 9px; }
+.watch-btn:hover{ color:var(--amber); border-color:var(--amber); }
+.watch-btn[aria-pressed="true"]{ color:var(--amber); border-color:var(--amber-dim); background:rgba(245,166,35,.08); }
+.pc{ font-size:12px; color:var(--text-primary); margin-top:6px; line-height:1.45; border-top:1px dashed var(--bezel); padding-top:6px; }
+.more{ margin-top:8px; text-align:center; }
+.empty{ font-size:12.5px; color:var(--text-muted); padding:10px 2px; }
+
+.wl{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.w{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; border:1px solid var(--bezel); border-radius:6px; padding:8px 10px; background:#151b23; font-size:12.5px; }
+.w .id{ font-family:'IBM Plex Mono',monospace; color:var(--amber); font-weight:500; }
+.w .sm{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+.lk{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+.lk .row{ display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:12.5px; border-bottom:1px solid var(--bezel); padding:5px 0; }
+
+.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (max-width:560px){ .grid2{ grid-template-columns:1fr; } }
+.box{ border:1px solid var(--bezel); border-radius:6px; padding:10px; }
+.box h3{ font-size:12.5px; margin:0 0 6px; font-weight:600; }
+label.ck{ display:flex; gap:8px; align-items:flex-start; font-size:12.5px; margin:5px 0; cursor:pointer; line-height:1.4; }
+label.ck input{ margin-top:2px; accent-color:var(--amber); }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
+.chip{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--amber); border:1px solid var(--amber-dim); border-radius:12px; padding:2px 8px; }
+.chip button{ all:unset; cursor:pointer; color:var(--text-muted); }
+.chip button:hover{ color:var(--amber); }
+.code{ font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--amber); letter-spacing:.04em; }
+.topic{ font-family:'IBM Plex Mono',monospace; font-size:12px; word-break:break-all; color:var(--text-primary); background:#0d1117; border:1px solid var(--bezel-hi); border-radius:5px; padding:4px 7px; display:inline-block; }
+ol.steps{ margin:6px 0 0 18px; padding:0; font-size:12.5px; line-height:1.55; color:var(--text-primary); }
+ol.steps a, .note a, .fine a{ color:var(--teal); }
+.log{ font-size:11.5px; color:var(--text-muted); margin:6px 0 0; padding:0; list-style:none; max-height:180px; overflow:auto; }
+.log li{ padding:3px 0; border-bottom:1px solid var(--bezel); }
+.msg{ font-size:12px; margin-top:6px; min-height:1em; color:var(--teal); }
+.msg.bad{ color:var(--alert); }
+</style>
+<!-- GGP-FOOTER-CSS START v1.15 · 25-Nov-2026 · shared footer styles + language core, App Conventions §5b · master: Control Panel repo tools/ggp-footer -->
+<script>
+(function () {
+  if (window.ggpLang) return;
+  var KEY = 'ggp-lang', I18N = false, SITES = ['geezer-geek-pilot-control-panel','weather-history-probability','digital-autopilots-quiz','tec-route-lookup','atc-chair-fly-trainer','days-flight-schedule','fuel-to-add','clearance-delivery','piston-ga-stats','claude-foreflight-primer','airfield-kml-builder','emergency-airstrips-mexico'];
+  var q = null, saved = null, lang, explicit = false;
+  try { q = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (q === 'en' || q === 'es') { lang = q; explicit = true; if (saved !== q) { try { localStorage.setItem(KEY, q); } catch (e) {} } }
+  else if (saved === 'en' || saved === 'es') { lang = saved; explicit = true; }
+  else {
+    var ua = navigator.userAgent || '';
+    var mobile = /iPhone|iPad|iPod|Android/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var first = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+    lang = mobile && /^es\b/i.test(first) ? 'es' : 'en';
+  }
+  var es = lang === 'es';
+  if (I18N) document.documentElement.lang = es ? 'es-MX' : 'en';
+  var MON = { en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+              es: ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'] };
+  var ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'value', 'content'];
+  var ours = function (host) { return SITES.indexOf(host.replace(/\.netlify\.app$/, '').replace(/^[a-z0-9-]+--/, '')) >= 0 && /\.netlify\.app$/.test(host); };
+  var withLang = function (href) {
+    try {
+      var u = new URL(href, location.href);
+      if (!/^https?:$/.test(u.protocol) || !ours(u.hostname)) return href;
+      u.searchParams.set('lang', lang);
+      return u.toString();
+    } catch (e) { return href; }
+  };
+  var G = window.ggpLang = {
+    lang: lang, es: es, explicit: explicit, i18n: I18N,
+    // L('English', 'Español'): the string for the current language (Spanish missing → English)
+    L: function (en, sp) { return es && sp != null ? sp : en; },
+    // dd-mmm-yyyy: 25-Nov-2026 / 25-nov-2026. Takes a Date or 'YYYY-MM-DD…'.
+    date: function (d) {
+      var y, m, dd;
+      if (d instanceof Date) { y = d.getFullYear(); m = d.getMonth(); dd = d.getDate(); }
+      else { var x = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); if (!x) return String(d || ''); y = +x[1]; m = +x[2] - 1; dd = +x[3]; }
+      return (dd < 10 ? '0' : '') + dd + '-' + MON[lang][m] + '-' + y;
+    },
+    // any 25-Nov-2026 in a string, in the current language (25-nov-2026)
+    dmy: function (str) {
+      if (!es) return String(str == null ? '' : str);
+      return String(str == null ? '' : str).replace(/\b(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{4})\b/g,
+        function (m, d, mo, y) { return d + '-' + MON.es[MON.en.indexOf(mo)] + '-' + y; });
+    },
+    withLang: withLang,
+    // Elements marked data-es="…" (innerHTML) or data-es-title, data-es-placeholder, … get their Spanish once.
+    apply: function (root) {
+      if (!es) return;
+      root = root || document;
+      var els = root.querySelectorAll('[data-es],' + ATTRS.map(function (a) { return '[data-es-' + a + ']'; }).join(','));
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.__ggpEs) continue;
+        el.__ggpEs = true;
+        if (el.hasAttribute('data-es') && (I18N || el.closest('.ggp-footer'))) el.innerHTML = el.getAttribute('data-es');
+        for (var j = 0; j < ATTRS.length; j++) {
+          var v = el.getAttribute('data-es-' + ATTRS[j]);
+          if (v != null && (I18N || el.closest('.ggp-footer'))) el.setAttribute(ATTRS[j], v);
+        }
+      }
+    },
+    // Save the choice and reload in it (the page is drawn once per language).
+    set: function (l) {
+      if (l !== 'en' && l !== 'es') return;
+      try { localStorage.setItem(KEY, l); } catch (e) {}
+      if (l === 'es' && !es) { try { fetch('https://tally.yuki.sh/counters/wamware/ggp-es-picked', { method: 'POST', keepalive: true }); } catch (e) {} }
+      if (l === lang && explicit) return;
+      var u = new URL(location.href); u.searchParams.delete('lang');
+      location.replace(u.toString());
+    }
+  };
+  // English | Español switch: any .ggp-lang-switch holding buttons with data-ggp-lang="en" / "es".
+  var mark = function () {
+    var bs = document.querySelectorAll('.ggp-lang-switch [data-ggp-lang]');
+    for (var i = 0; i < bs.length; i++) {
+      var on = bs[i].getAttribute('data-ggp-lang') === lang;
+      bs[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+      bs[i].classList.toggle('on', on);
+    }
+  };
+  document.addEventListener('click', function (ev) {
+    var t = ev.target instanceof Element ? ev.target : null;
+    var b = t && t.closest('.ggp-lang-switch [data-ggp-lang]');
+    if (b) { ev.preventDefault(); G.set(b.getAttribute('data-ggp-lang')); return; }
+    // carry the choice to the suite's other sites (each keeps its own storage)
+    var a = explicit && t && t.closest('a[href]');
+    if (a) { var h = withLang(a.href); if (h !== a.href) a.href = h; }
+  }, true);
+  var links = function () {
+    if (!explicit) return;
+    var as = document.querySelectorAll('a[href]');
+    for (var i = 0; i < as.length; i++) { var h = withLang(as[i].href); if (h !== as[i].href) as[i].href = h; }
+  };
+  document.addEventListener('DOMContentLoaded', function () { G.apply(); mark(); links(); });
+  G.mark = mark;
+})();
+</script>
+<style>
+.ggp-footer{
+  --ggp-amber:#f5a623; --ggp-muted:#8b93a1; --ggp-bezel:#2a323f; --ggp-bezel-hi:#3a4454;
+  box-sizing:border-box; width:100%; max-width:640px; margin:28px auto 0; padding:16px 0 8px;
+  border-top:1px solid var(--ggp-bezel); text-align:center;
+  font-family:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size:11px; line-height:1.5; color:var(--ggp-muted);
+}
+.ggp-footer *, .ggp-footer *::before, .ggp-footer *::after{ box-sizing:border-box; }
+.ggp-footer .ggp-back{ margin:0 0 12px; }
+.ggp-footer .ggp-back a{
+  display:inline-block; padding:6px 14px; border:1px solid var(--ggp-bezel-hi); border-radius:5px;
+  background:var(--ggp-bezel); color:var(--ggp-amber); font-size:12px; font-weight:500; text-decoration:none;
+}
+.ggp-footer .ggp-back a:hover{ background:var(--ggp-bezel-hi); color:var(--ggp-amber); text-decoration:none; }
+.ggp-footer .ggp-extra{ margin:0 0 6px; text-wrap:balance; }
+.ggp-footer .ggp-credit{ margin:0; }
+.ggp-footer .ggp-extra a, .ggp-footer .ggp-credit a{
+  color:var(--ggp-muted); text-decoration:none; border-bottom:1px solid var(--ggp-bezel-hi); padding-bottom:1px;
+}
+.ggp-footer .ggp-extra a:hover, .ggp-footer .ggp-credit a:hover{ color:var(--ggp-amber); border-bottom-color:var(--ggp-amber); }
+.ggp-footer .ggp-count{ margin-top:6px; }
+.ggp-footer .ggp-count:empty{ display:none; }
+.ggp-footer .ggp-count a{ color:inherit; text-decoration:none; border-bottom:1px dotted var(--ggp-bezel-hi); padding-bottom:1px; }
+.ggp-footer .ggp-count a:hover{ color:var(--ggp-amber); border-bottom-color:var(--ggp-amber); }
+.ggp-footer .ggp-actions{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:12px; }
+.ggp-footer .ggp-pill{
+  display:inline-flex; align-items:center; gap:7px; margin:0; padding:8px 16px;
+  border:1px solid var(--ggp-bezel-hi); border-radius:20px; background:transparent; color:var(--ggp-muted);
+  font:inherit; font-size:12.5px; line-height:1.2; cursor:pointer; transition:color .15s ease, border-color .15s ease;
+}
+.ggp-footer a.ggp-pill{ text-decoration:none; }
+/* v1.6: shown under a feedback button when no email app opened */
+.ggp-fb-note{ flex-basis:100%; margin:10px auto 0; max-width:460px; padding:10px 12px; border:1px solid #3a4454; border-radius:6px;
+  font:12px/1.5 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; color:#8b93a1; text-align:center; }
+.ggp-fb-note b{ color:#e7e4dc; font-weight:500; user-select:all; }
+.ggp-fb-note button{ margin-left:8px; padding:3px 10px; border:1px solid #3a4454; border-radius:12px; background:transparent;
+  color:#f5a623; font:inherit; cursor:pointer; }
+.ggp-footer .ggp-pill:hover{ color:var(--ggp-amber); border-color:var(--ggp-amber); background:transparent; }
+.ggp-footer .ggp-pill svg{ width:15px; height:15px; flex-shrink:0; }
+.ggp-footer .ggp-pill span{ text-wrap:balance; }
+@media (max-width:400px){ .ggp-footer .ggp-pill{ font-size:12px; padding:8px 12px; gap:6px; } }
+.ggp-footer a:focus-visible, .ggp-footer .ggp-pill:focus-visible{ outline:2px solid var(--ggp-amber); outline-offset:2px; }
+@media print{
+  .ggp-footer .ggp-back, .ggp-footer .ggp-extra, .ggp-footer .ggp-count, .ggp-footer .ggp-actions{ display:none !important; }
+  .ggp-footer{ border-top:0; margin-top:8px; padding-top:0; }
+}
+/* v1.15: English | Español switch (App Conventions "Language"); sits at the right end of the title row */
+.ggp-lang-switch{ display:inline-flex; flex-shrink:0; border:1px solid #f5a623; border-radius:16px; overflow:hidden;
+  font:600 12.5px/1 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.ggp-lang-switch button{ margin:0; padding:7px 12px; border:0; background:transparent; color:#f5a623; font:inherit; cursor:pointer; }
+.ggp-lang-switch button + button{ border-left:1px solid #f5a623; }
+.ggp-lang-switch button.on, .ggp-lang-switch button[aria-pressed="true"]{ background:#f5a623; color:#10141a; }
+.ggp-lang-switch button:not(.on):hover{ background:rgba(245,166,35,.15); }
+.ggp-lang-switch button:focus-visible{ outline:2px solid #e7e4dc; outline-offset:-3px; }
+@media (max-width:400px){ .ggp-lang-switch button{ padding:7px 9px; font-size:12px; } }
+@media print{ .ggp-lang-switch{ display:none !important; } }
+</style>
+<!-- GGP-FOOTER-CSS END -->
+</head>
+<body>
+<div class="rig">
+  <div class="title-row">
+    <h1>Tracking Piston GA Accidents</h1>
+    <span class="ver mono">v0.1</span>
+  </div>
+  <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
+  <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
+
+  <div class="panel">
+
+    <section class="step" id="secList">
+      <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub">since 01-Oct-2026</span></h2>
+      <p class="status" id="status">Loading…</p>
+      <div class="ctls">
+        <div class="seg" id="sevSeg" role="group" aria-label="Severity">
+          <button type="button" data-v="all" aria-pressed="true">All</button>
+          <button type="button" data-v="fatal" aria-pressed="false">Fatal</button>
+          <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
+        </div>
+        <select id="famSel" aria-label="Aircraft type"><option value="">All types</option></select>
+        <select id="stSel" aria-label="State"><option value="">All states</option></select>
+        <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
+      </div>
+      <div class="list" id="list"></div>
+      <div class="more" id="moreWrap" hidden><button class="btn sm" id="moreBtn" type="button">Show more</button></div>
+    </section>
+
+    <section class="step" id="secWatch">
+      <h2><span class="num">2</span> Watch list <span class="sub">pings when a watched case or N-number changes</span></h2>
+      <div id="watchNeedProfile" class="note">Watches belong to an alert profile. Set one up in section 3 first; it takes one tap.</div>
+      <div id="watchArea" hidden>
+        <div class="ctls">
+          <input type="text" class="mono" id="wTail" placeholder="N-number, e.g. N211WP" style="flex:1 1 160px" aria-label="N-number to look up">
+          <button class="btn sm primary" id="wLook" type="button">Look up</button>
+        </div>
+        <p class="note">Watch a whole N-number (any new or changed NTSB case for that aircraft) or one case from its list. You can also tap <b>☆ Watch</b> on any accident in section 1.</p>
+        <div class="lk" id="lookOut"></div>
+        <div class="wl" id="wl"></div>
+      </div>
+    </section>
+
+    <section class="step" id="secAlerts">
+      <h2><span class="num">3</span> Alerts <span class="sub">how and when you get pinged</span></h2>
+      <div id="noProfile">
+        <p class="note">An alert profile holds your ping settings and watch list. It's kept on the GeezerGeek server under a code, so you can use the same profile on your phone and computer.</p>
+        <div class="ctls">
+          <button class="btn primary" id="mkProfile" type="button">Set up my alerts</button>
+          <span class="note" style="margin:0">or use an existing code:</span>
+          <input type="text" class="mono" id="codeIn" placeholder="XXXX-XXXX-XXXX" style="width:170px" aria-label="Profile code">
+          <button class="btn sm" id="useCode" type="button">Use</button>
+        </div>
+      </div>
+      <div id="hasProfile" hidden>
+        <p class="note">Profile code <span class="code" id="codeOut"></span> · <a href="#" id="forget">use a different code</a></p>
+        <div class="grid2">
+          <div class="box">
+            <h3>Ping me</h3>
+            <label class="ck"><input type="checkbox" id="rFatal" checked> <span><b>Every fatal accident</b> (piston fixed-wing, US)</span></label>
+            <label class="ck"><input type="checkbox" id="rNew"> <span>Other new accidents that match:</span></label>
+            <div id="rNewBox" style="margin-left:24px">
+              <div class="chips" id="rSev">
+                <label class="ck"><input type="checkbox" value="Fatal" checked> Fatal</label>
+                <label class="ck"><input type="checkbox" value="Serious" checked> Serious</label>
+                <label class="ck"><input type="checkbox" value="Minor"> Minor</label>
+                <label class="ck"><input type="checkbox" value="None"> No injuries</label>
+              </div>
+              <div class="ctls" style="margin:4px 0">
+                <select id="rFamAdd" aria-label="Add a type"><option value="">+ type (any if none)</option></select>
+                <select id="rStAdd" aria-label="Add a state"><option value="">+ state (any if none)</option></select>
+              </div>
+              <div class="chips" id="rChips"></div>
+            </div>
+            <label class="ck"><input type="checkbox" checked disabled> <span>Changes on my watch list</span></label>
+          </div>
+          <div class="box">
+            <h3>Send pings to</h3>
+            <label class="ck"><input type="checkbox" id="pPush" checked> <span><b>iPhone / Android / desktop push</b>, through the free ntfy app</span></label>
+            <ol class="steps">
+              <li>Install ntfy (<a href="https://apps.apple.com/us/app/ntfy/id1625396347" target="_blank" rel="noopener">App Store</a>; Android and web: <a href="https://docs.ntfy.sh/subscribe/phone/" target="_blank" rel="noopener">ntfy docs</a>).</li>
+              <li>Tap <b>+</b> and subscribe to this topic:<br><span class="topic" id="topicOut"></span> <button class="btn sm" id="copyTopic" type="button">Copy</button></li>
+              <li>Send a test ping below.</li>
+            </ol>
+            <label class="ck" style="margin-top:10px"><input type="checkbox" id="pEmail"> <span><b>Email</b></span></label>
+            <input type="email" id="emailIn" placeholder="you@example.com" style="width:100%">
+            <p class="note" id="emailNote">Email goes out through ntfy too, which allows 5 emails a day per account. Until the app's ntfy account is set up, email is saved but not sent.</p>
+          </div>
+        </div>
+        <div class="ctls" style="margin-top:10px">
+          <button class="btn primary" id="save" type="button">Save</button>
+          <button class="btn" id="test" type="button">Send a test ping</button>
+        </div>
+        <div class="msg" id="msg"></div>
+        <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Recent pings for this profile</summary><ul class="log" id="log"></ul></details>
+      </div>
+    </section>
+
+    <section class="step" id="secHow">
+      <h2><span class="num">4</span> How this works</h2>
+      <p class="note"><b>Source.</b> The NTSB Public API (developer.ntsb.gov), the same database behind NTSB CAROL. A server check runs every hour and keeps US piston fixed-wing cases with an event date from 01-Oct-2026 on. "Piston" means NTSB lists a reciprocating engine, or, where NTSB gives no engine type, the model is one of GA Accident Stats' piston types.</p>
+      <p class="note"><b>What a ping means.</b> A new-accident ping comes when NTSB first lists the case, usually a few days after the event. NTSB's first details are preliminary and can change. A watch ping comes when a watched case's status, report date, probable cause, injury counts or closure changes, or when a watched N-number gets a new case.</p>
+      <p class="note"><b>Not yet included.</b> The FAA's next-day preliminary notices (faster than NTSB, but only kept for 10 business days) and Mexico and Canada.</p>
+      <p class="note"><b>Privacy.</b> Your profile holds your settings, watch list, optional email address and a random ntfy topic name. Anyone who has the profile code or topic name can see that profile's pings, so keep them to yourself.</p>
+    </section>
+  </div>
+
+  <p class="fine">Accident information is NTSB's, preliminary until NTSB completes the investigation; nothing here adds to or interprets it. Not an official NTSB or FAA product. Pings are best-effort and can be delayed or missed; don't rely on them for anything time-critical.</p>
+
+<!-- GGP-FOOTER START v1.15 · 25-Nov-2026 · shared footer, App Conventions §5a · master: Control Panel repo tools/ggp-footer -->
+<footer class="ggp-footer">
+  <div class="ggp-back"><a href="https://geezer-geek-pilot-control-panel.netlify.app/" data-es="&larr; Volver a las apps de GeezerGeek Pilot">&larr; Back to GeezerGeek Pilot Apps</a></div>
+  <div class="ggp-credit">Wayne McClelland (<a href="https://geezer-geek-pilot-control-panel.netlify.app/airports/" target="_blank" rel="noopener" data-es="aeropuertos visitados">airports visited</a>), <a href="https://youtube.com/@GeezerGeekPilot" target="_blank" rel="noopener">GeezerGeek Pilot</a>, <a href="https://geezer-geek-pilot-control-panel.netlify.app/reference" target="_blank" rel="noopener" data-es="Material de referencia">Reference Materials</a></div>
+  <div class="ggp-actions">
+    <button class="ggp-pill ggp-share" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg><span data-es="Comparte las apps de GeezerGeek Pilot con amigos pilotos">Share GeezerGeek Pilot Apps with pilot friends</span></button>
+    <button class="ggp-pill ggp-feedback" type="button" data-app="Tracking Piston GA Accidents"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span data-es="Comentarios a GeezerGeek Pilot">Feedback to GeezerGeek Pilot</span></button>
+    <a class="ggp-pill ggp-videos" href="https://www.youtube.com/playlist?list=PLZEU99ONr5bE" target="_blank" rel="noopener"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="4"/><polygon points="10 9 15 12 10 15" fill="currentColor"/></svg><span data-es="Videos de introducción en YouTube (en inglés)">YouTube intros to the apps</span></a>
+  </div>
+</footer>
+<!-- GGP-FOOTER END -->
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const API = '/.netlify/functions/api';
+const STATS = 'https://piston-ga-stats.netlify.app/';
+const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dmy = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}-${M[+m[2]-1]}-${m[1]}` : ''; };
+const dmyT = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' :
+  `${String(d.getDate()).padStart(2,'0')}-${M[d.getMonth()]}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tailKey = s => { let t = String(s || '').toUpperCase().replace(/[\s-]/g, ''); if (t && !t.startsWith('N')) t = 'N' + t; return t; };
+const okTail = t => /^N[1-9][0-9A-Z]{0,4}$/.test(t);
+const sevOf = c => c.fatal ? 'fatal' : c.serious ? 'serious' : c.minor ? 'minor' : 'none';
+const injText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : 'No injuries';
+const pdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
+const reg = t => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${encodeURIComponent(t)}`;
+const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+             set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
+
+const st = { cases: [], sev: 'all', fam: '', state: '', q: '', shown: 40, focus: new URLSearchParams(location.search).get('case') || '' };
+let P = null;   // alert profile
+
+// ------------------------------------------------------------ feed
+async function loadFeed() {
+  try {
+    const r = await fetch(API + '?op=feed');
+    const d = await r.json();
+    st.cases = d.cases || [];
+    const s = d.status;
+    let line = st.cases.length.toLocaleString() + ' accidents';
+    if (d.asOf) line += ` · NTSB checked ${dmyT(d.asOf)}`;
+    if (s && !s.ok && s.error) line += ` · <span class="bad">last check had a problem: ${esc(s.error)}</span>`;
+    if (!d.asOf && !st.cases.length) line = 'No accidents gathered yet: the first server check hasn\'t run.';
+    $('status').innerHTML = line;
+    fillSelects();
+    render();
+    if (st.focus) { const el = document.getElementById('c-' + st.focus); if (el) el.scrollIntoView({ block: 'center' }); }
+  } catch (e) { $('status').innerHTML = '<span class="bad">Couldn\'t load the accident list.</span>'; }
+}
+
+function fillSelects() {
+  const fams = [...new Set(st.cases.map(c => c.fam).filter(Boolean))].sort();
+  const sts = [...new Set(st.cases.map(c => c.st).filter(Boolean))].sort();
+  $('famSel').innerHTML = '<option value="">All types</option>' + fams.map(f => `<option>${esc(f)}</option>`).join('');
+  $('stSel').innerHTML = '<option value="">All states</option>' + sts.map(s => `<option>${esc(s)}</option>`).join('');
+  $('famSel').value = st.fam; $('stSel').value = st.state;
+  $('rFamAdd').innerHTML = '<option value="">+ type (any if none)</option>' + FAMS.map(f => `<option>${esc(f)}</option>`).join('');
+  $('rStAdd').innerHTML = '<option value="">+ state (any if none)</option>' + STATES.map(s => `<option>${s}</option>`).join('');
+}
+
+const watching = c => !!(P && P.watches.some(w => (w.kind === 'case' && w.id === c.ntsb) || (w.kind === 'tail' && w.tail === c.reg)));
+
+function render() {
+  const q = st.q.trim().toUpperCase();
+  const list = st.cases.filter(c =>
+    (st.sev === 'all' || (st.sev === 'fatal' ? c.fatal > 0 : (c.fatal > 0 || c.serious > 0))) &&
+    (!st.fam || c.fam === st.fam) && (!st.state || c.st === st.state) &&
+    (!q || [c.reg, c.city, c.make, c.model, c.ntsb, c.fam].join(' ').toUpperCase().includes(q)));
+  const rows = list.slice(0, st.shown).map(c => {
+    const sev = sevOf(c);
+    const loc = [c.city, c.st].filter(Boolean).join(', ');
+    const meta = [c.fam && c.fam !== c.model ? c.fam : '', c.yb ? 'built ' + c.yb : '', c.damage ? c.damage.toLowerCase() + ' damage' : '', c.phase, c.def].filter(Boolean).join(' · ');
+    const statusTxt = c.status ? `NTSB ${esc(c.ntsb)} · ${esc(c.status)}${c.reportDate ? ' · report ' + dmy(c.reportDate) : ''}` : `NTSB ${esc(c.ntsb)}`;
+    const links = [
+      c.status === 'Completed' && pdf(c) ? `<a href="${pdf(c)}" target="_blank" rel="noopener">NTSB report (PDF)</a>` : '',
+      c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
+      c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
+    ].filter(Boolean).join('');
+    const w = watching(c);
+    return `<div class="acc ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
+      <div class="acc-top"><span class="acc-ac">${esc(c.make)} ${esc(c.model)}<span class="reg">${esc(c.reg)}</span></span><span class="acc-date">${dmy(c.date)}</span></div>
+      <div class="acc-mid"><span class="inj ${sev}">${injText(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
+      <div class="acc-meta">${meta ? esc(meta) + '<br>' : ''}${statusTxt}</div>
+      ${c.pc ? `<div class="pc"><b>NTSB probable cause:</b> ${esc(c.pc)}</div>` : ''}
+      <div class="acc-links">${links}<button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
+    </div>`;
+  });
+  $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
+  $('moreWrap').hidden = list.length <= st.shown;
+}
+
+$('sevSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  st.sev = b.dataset.v; st.shown = 40;
+  [...$('sevSeg').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  render();
+});
+$('famSel').onchange = e => { st.fam = e.target.value; st.shown = 40; render(); };
+$('stSel').onchange = e => { st.state = e.target.value; st.shown = 40; render(); };
+$('q').oninput = e => { st.q = e.target.value; st.shown = 40; render(); };
+$('moreBtn').onclick = () => { st.shown += 40; render(); };
+$('list').addEventListener('click', async e => {
+  const b = e.target.closest('.watch-btn'); if (!b) return;
+  if (!P) { $('secAlerts').scrollIntoView({ block: 'start', behavior: 'smooth' }); flash('Set up your alerts first, then tap Watch again.', true); return; }
+  const id = b.dataset.case, tail = b.dataset.tail;
+  const i = P.watches.findIndex(w => w.kind === 'case' && w.id === id);
+  if (i >= 0) P.watches.splice(i, 1); else P.watches.push({ kind: 'case', id, tail });
+  await saveProfile({ watches: P.watches });
+});
+
+// ------------------------------------------------------------ profile
+const FAMS = ['120/140','150/152','170','172','172 Hawk XP','172RG','175','177/Cardinal','180/185','182','195','205/206/207','210','310/320','335/340','336/337','350/400 (Columbia)','401-421 twins',
+  'Baron 55/58','Bonanza 33','Bonanza 35 (V-tail)','Bonanza 36','Duchess 76','Musketeer/Sundowner/Sierra','Skipper 77','Travel Air 95',
+  'SR20','SR22','SR22T','DA20','DA40','DA40 NG','DA42','DA62','M20 (C/E/F/G/J)','M20 early (A/B)','M20K/M/R/S/TN/V',
+  'J-3 Cub','PA-12 Super Cruiser','PA-18 Super Cub','PA-22 Tri-Pacer/Colt','PA-23 Apache/Aztec','PA-24 Comanche','PA-28 Cherokee/Warrior/Archer','PA-28R Arrow','PA-30/39 Twin Comanche','PA-31 Navajo','PA-32 Cherokee Six/Saratoga','PA-34 Seneca','PA-38 Tomahawk','PA-44 Seminole','PA-46 Malibu/Mirage'];
+const STATES = 'AK AL AR AZ CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA PR RI SC SD TN TX UT VA VI VT WA WI WV WY GU'.split(' ');
+
+function flash(t, bad) { const m = $('msg'); m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); clearTimeout(flash.t); flash.t = setTimeout(() => { m.textContent = ''; }, 6000); }
+
+function showProfile() {
+  $('noProfile').hidden = !!P; $('hasProfile').hidden = !P;
+  $('watchNeedProfile').hidden = !!P; $('watchArea').hidden = !P;
+  if (!P) return;
+  $('codeOut').textContent = P.code; $('topicOut').textContent = P.topic;
+  $('rFatal').checked = P.rules.fatal !== false; $('rNew').checked = !!P.rules.newOn;
+  [...$('rSev').querySelectorAll('input')].forEach(i => { i.checked = P.rules.sev.includes(i.value); });
+  $('pPush').checked = P.push !== false; $('pEmail').checked = !!P.emailOn; $('emailIn').value = P.email || '';
+  drawChips(); drawWatches();
+  $('log').innerHTML = (P.log || []).map(l => `<li>${dmyT(l.at)} · ${esc(l.text)}</li>`).join('') || '<li>None yet.</li>';
+  render();
+}
+function drawChips() {
+  const r = P.rules;
+  $('rChips').innerHTML = r.fams.map(f => `<span class="chip">${esc(f)} <button type="button" data-f="${esc(f)}" aria-label="Remove">×</button></span>`).join('')
+    + r.states.map(s => `<span class="chip">${esc(s)} <button type="button" data-s="${esc(s)}" aria-label="Remove">×</button></span>`).join('');
+}
+$('rChips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.f) P.rules.fams = P.rules.fams.filter(x => x !== b.dataset.f);
+  if (b.dataset.s) P.rules.states = P.rules.states.filter(x => x !== b.dataset.s);
+  drawChips();
+});
+$('rFamAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.fams.includes(v)) P.rules.fams.push(v); e.target.value = ''; drawChips(); };
+$('rStAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.states.includes(v)) P.rules.states.push(v); e.target.value = ''; drawChips(); };
+
+function drawWatches() {
+  $('wl').innerHTML = P.watches.map((w, i) => {
+    const l = w.latest;
+    const what = w.kind === 'tail' ? `Every case for <span class="id">${esc(w.tail)}</span>` : `Case <span class="id">${esc(w.id)}</span> · ${esc(w.tail)}`;
+    const sub = l ? `Latest: ${dmy(l.date)} ${esc(l.make || '')} ${esc(l.model || '')} · ${esc(l.highest || '')} · ${esc(l.status || '')}${l.reportDate ? ' · report ' + dmy(l.reportDate) : ''}`
+      : (w.kind === 'tail' ? 'No NTSB cases seen yet for this N-number.' : '');
+    const chk = w.checked ? `Checked ${dmyT(w.checked)}` : 'First check at the next hourly run';
+    const rep = l && l.status === 'Completed' && l.mkey ? ` · <a href="${pdf(l)}" target="_blank" rel="noopener" style="color:var(--teal)">report</a>` : '';
+    return `<div class="w"><div>${what}<div class="sm">${sub}${rep}</div><div class="sm">${chk}</div></div>
+      <button class="btn sm" type="button" data-i="${i}">Remove</button></div>`;
+  }).join('') || '<div class="empty">Nothing watched yet.</div>';
+}
+$('wl').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-i]'); if (!b) return;
+  P.watches.splice(+b.dataset.i, 1);
+  await saveProfile({ watches: P.watches });
+});
+
+$('wLook').onclick = async () => {
+  const t = tailKey($('wTail').value);
+  if (!okTail(t)) { $('lookOut').innerHTML = '<div class="empty">That isn\'t a US N-number.</div>'; return; }
+  $('lookOut').innerHTML = '<div class="empty">Asking NTSB…</div>';
+  try {
+    const r = await fetch(API + '?op=tail&q=' + encodeURIComponent(t));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    const rows = d.cases.map(c => `<div class="row"><span>${dmy(c.date)} · ${esc(c.make)} ${esc(c.model)} · ${injText(c)} · <span class="mono">${esc(c.ntsb)}</span> ${esc(c.status)}</span>
+      <button class="btn sm" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(t)}">Watch case</button></div>`).join('');
+    $('lookOut').innerHTML = `<div class="row"><span><b>${esc(t)}</b>: ${d.cases.length} NTSB case${d.cases.length === 1 ? '' : 's'}</span>
+      <button class="btn sm primary" type="button" data-wtail="${esc(t)}">Watch ${esc(t)}</button></div>` + rows;
+  } catch (e) { $('lookOut').innerHTML = `<div class="empty">NTSB lookup failed (${esc(e.message)}).</div>`; }
+};
+$('wTail').onkeydown = e => { if (e.key === 'Enter') $('wLook').click(); };
+$('lookOut').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.wtail) { if (!P.watches.some(w => w.kind === 'tail' && w.tail === b.dataset.wtail)) P.watches.push({ kind: 'tail', id: b.dataset.wtail, tail: b.dataset.wtail }); }
+  else if (b.dataset.case) { if (!P.watches.some(w => w.kind === 'case' && w.id === b.dataset.case)) P.watches.push({ kind: 'case', id: b.dataset.case, tail: b.dataset.tail }); }
+  $('lookOut').innerHTML = '';
+  await saveProfile({ watches: P.watches });
+});
+
+async function loadProfile(code) {
+  const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(code));
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+  P = await r.json(); LS.set('tpga-code', P.code); showProfile();
+}
+async function saveProfile(part) {
+  const body = part || {
+    rules: { ...P.rules, fatal: $('rFatal').checked, newOn: $('rNew').checked,
+             sev: [...$('rSev').querySelectorAll('input:checked')].map(i => i.value) },
+    push: $('pPush').checked, emailOn: $('pEmail').checked, email: $('emailIn').value.trim(),
+  };
+  try {
+    const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    P = d; showProfile(); flash('Saved.');
+  } catch (e) { flash('Couldn\'t save: ' + e.message, true); }
+}
+$('mkProfile').onclick = async () => {
+  $('mkProfile').disabled = true;
+  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); flash('Alert profile made. Subscribe to the topic in ntfy, then send a test ping.'); }
+  catch (e) { P = null; alert('Couldn\'t make a profile: ' + e.message); }
+  $('mkProfile').disabled = false;
+};
+$('useCode').onclick = async () => {
+  try { await loadProfile($('codeIn').value.trim().toUpperCase()); } catch (e) { alert('No profile found: ' + e.message); }
+};
+$('forget').onclick = e => { e.preventDefault(); P = null; LS.set('tpga-code', null); showProfile(); render(); };
+$('save').onclick = () => saveProfile();
+$('test').onclick = async () => {
+  $('test').disabled = true;
+  try { const r = await fetch(API + '?op=test&code=' + encodeURIComponent(P.code), { method: 'POST' }); flash(r.ok ? 'Test ping sent. It should arrive within a minute.' : 'The ping service didn\'t accept it (HTTP ' + r.status + ').', !r.ok); }
+  catch (e) { flash('Test failed: ' + e.message, true); }
+  $('test').disabled = false;
+};
+$('copyTopic').onclick = async () => { try { await navigator.clipboard.writeText(P.topic); flash('Topic copied.'); } catch (e) { flash('Copy failed; select the topic and copy it.', true); } };
+
+const saved = LS.get('tpga-code');
+if (saved) loadProfile(saved).catch(() => { LS.set('tpga-code', null); showProfile(); }); else showProfile();
+loadFeed();
+})();
+
+// ---- open counter (App-Conventions §6b; Tally, fails silently) ----
+fetch('https://tally.yuki.sh/counters/wamware/tracking-piston-ga-accidents', { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    const el = document.getElementById('hitCounter');
+    const n = d && d.visit;
+    if (el && typeof n === 'number') el.textContent = 'Opened ' + n.toLocaleString() + (n === 1 ? ' time' : ' times');
+  })
+  .catch(() => { /* counter is a nice-to-have, never block the app */ });
+</script>
+<!-- GGP-FOOTER-JS START v1.15 · 25-Nov-2026 · shared footer script, App Conventions §6a/§6b · master: Control Panel repo tools/ggp-footer -->
+<script>
+(() => {
+  if (window.__ggpFooter) return;
+  window.__ggpFooter = true;
+  // Every app's footer share button shares the Control Panel, not the app itself.
+  // v1.15: shared from a Spanish page, the link carries ?lang=es (Spanish preview card, Control Panel opens in Spanish)
+  const SHARE_URL   = 'https://geezer-geek-pilot-control-panel.netlify.app/' + (window.ggpLang && window.ggpLang.es ? '?lang=es' : '');
+  const SHARE_TITLE = window.ggpLang && window.ggpLang.es ? 'Apps de GeezerGeek Pilot' : 'GeezerGeek Pilot Apps';
+  const L = (en, es) => (window.ggpLang ? window.ggpLang.L(en, es) : en);
+  const SHARE_TEXT  = L('Planning, weather, ATC-practice and safety tools for GA pilots, from GeezerGeek Pilot.', 'Herramientas de planeación, meteorología, práctica de ATC y seguridad para pilotos de aviación general, de GeezerGeek Pilot.');
+  if (window.ggpLang) window.ggpLang.apply(document.querySelector('.ggp-footer') || document);
+  const flash = (btn) => {
+    if (btn.dataset.ggpBusy) return;
+    btn.dataset.ggpBusy = '1';
+    const label = btn.querySelector('span') || btn;
+    const original = label.textContent;
+    label.textContent = label === btn ? L('Link copied!', '¡Enlace copiado!') : L('Link copied to clipboard!', '¡Enlace copiado al portapapeles!');
+    setTimeout(() => { label.textContent = original; delete btn.dataset.ggpBusy; }, 2200);
+  };
+  // One listener on the document, so it also covers footers an app draws later and any other
+  // button given the ggp-share class.
+  document.addEventListener('click', async (ev) => {
+    const btn = ev.target instanceof Element ? ev.target.closest('.ggp-share') : null;
+    if (!btn) return;
+    ev.preventDefault();
+    if (navigator.share) {
+      try { await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: SHARE_URL }); return; }
+      catch (err) { if (err && err.name === 'AbortError') return; /* else fall through */ }
+    }
+    try {
+      await navigator.clipboard.writeText(SHARE_URL);
+      flash(btn);
+    } catch (err) {
+      window.location.href = 'mailto:?subject=' + encodeURIComponent(SHARE_TITLE)
+        + '&body=' + encodeURIComponent(SHARE_TEXT + ' ' + SHARE_URL);
+    }
+  });
+  // v1.6 feedback: any element with class ggp-feedback opens an email to Wayne naming its data-app.
+  // If no email app takes over within ~1.5 s (page still focused), show the address with a Copy button.
+  document.addEventListener('click', (ev) => {
+    const btn = ev.target instanceof Element ? ev.target.closest('.ggp-feedback') : null;
+    if (!btn) return;
+    ev.preventDefault();
+    const addr = ['waynemcc', 'wamware.com'].join('@');
+    const app = btn.dataset.app || document.title;
+    const subject = 'GeezerGeek feedback: ' + app;
+    // v1.8: subject only, empty body (no page link or device string), per Wayne
+    let left = false;
+    const onLeave = () => { left = true; };
+    window.addEventListener('blur', onLeave, { once: true });
+    document.addEventListener('visibilitychange', onLeave, { once: true });
+    window.location.href = 'mailto:' + addr + '?subject=' + encodeURIComponent(subject);
+    setTimeout(() => {
+      window.removeEventListener('blur', onLeave);
+      document.removeEventListener('visibilitychange', onLeave);
+      if (left || !document.hasFocus()) return;           // an email app opened
+      const host = btn.parentElement;
+      if (host.querySelector('.ggp-fb-note')) return;
+      const note = document.createElement('div');
+      note.className = 'ggp-fb-note';
+      note.setAttribute('role', 'status');
+      note.innerHTML = L('No email app opened? Write to ', '¿No se abrió tu app de correo? Escribe a ') + '<b></b><button type="button">' + L('Copy address', 'Copiar dirección') + '</button>';
+      note.querySelector('b').textContent = addr;
+      note.querySelector('button').addEventListener('click', async (e) => {
+        try { await navigator.clipboard.writeText(addr); e.target.textContent = L('Copied', 'Copiada'); }
+        catch (err) { e.target.textContent = L('Select it above', 'Selecciónala arriba'); }
+      });
+      host.appendChild(note);
+    }, 1500);
+  });
+  // v1.12: every app also hits one shared Tally counter, so its `visitor` = unique visitors across all apps
+  // (the Open Counts page shows it as "unique since 10-Nov-2026"). Pages that are not apps carry
+  // data-ggp-all="off" on their footer. The Quiz draws its footer later, so a missing footer still counts.
+  if (!document.querySelector('.ggp-footer[data-ggp-all="off"]')) {
+    fetch('https://tally.yuki.sh/counters/wamware/ggp-all', { method: 'POST' }).catch(() => { /* never block the app */ });
+    // v1.15: and, when the page opens in Spanish, wamware/ggp-es (opens in Spanish; its visitor = Spanish users)
+    if (window.ggpLang && window.ggpLang.es)
+      fetch('https://tally.yuki.sh/counters/wamware/ggp-es', { method: 'POST' }).catch(() => {});
+  }
+  // Open counter: shown only where the footer has #ggpCount (the Control Panel). Apps count silently.
+  const countEl = document.getElementById('ggpCount');
+  if (countEl) {
+    // v1.13: Tally (now "Tallyflare") moved to /counters/<ns>/<key>: POST records a visit and returns the
+    // counts, GET only reads. The old hits URLs return 404 since ~11-Nov-2026; counts carried over.
+    fetch('https://tally.yuki.sh/counters/wamware/geezer-geek-pilot-control-panel', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        const base = parseInt(countEl.dataset.base, 10) || 0;  // pre-Tally opens, App Conventions §6b
+        const n = d && typeof d.visit === 'number' ? d.visit + base : null;
+        if (typeof n !== 'number') return;
+        const text = L('Opened ', 'Abierta ') + n.toLocaleString('en-US') + (n === 1 ? L(' time', ' vez') : L(' times', ' veces'));
+        const href = countEl.dataset.href;   // v1.4: the count links to the open-counts page
+        if (href) {
+          const a = document.createElement('a');
+          a.href = href; a.textContent = text; a.title = L('Open counts for every app', 'Aperturas de cada app');
+          countEl.replaceChildren(a);
+        } else countEl.textContent = text;
+      })
+      .catch(() => { /* counter is a nice-to-have, never block the app */ });
+  }
+})();
+</script>
+<!-- GGP-FOOTER-JS END -->
+</body>
+</html>

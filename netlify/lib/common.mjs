@@ -1,0 +1,204 @@
+// Tracking Piston GA Accidents — shared server code (imported by the functions; not a function itself).
+// Dependency-free on purpose (App Conventions §1: no npm install, no build step).
+//
+// Pieces:
+//   Blobs     — dependency-free Netlify Blobs client (same approach as Day's Flight Schedule sync.mjs)
+//   NTSB      — NTSB Public API (key: Netlify secret env var NTSB_API_KEY, header Ocp-Apim-Subscription-Key)
+//   slimCase  — one NTSB case reduced to what the app shows and watches
+//   piston    — piston fixed-wing test + type family names (ported from GA Accident Stats build/families.py)
+//   ntfy      — push notifications through ntfy.sh (docs.ntfy.sh/publish, read 25-Nov-2026)
+
+export const STORE = 'tracking-piston-ga-accidents';
+export const SINCE = '2026-10-01';          // first accident date gathered (Wayne, 25-Nov-2026)
+export const APP_URL = 'https://tracking-piston-ga-accidents.netlify.app/';
+export const STATS_URL = 'https://piston-ga-stats.netlify.app/';
+
+// ---------------------------------------------------------------- Blobs
+function blobsContext() {
+  const raw = globalThis.netlifyBlobsContext
+    || (globalThis.Netlify && globalThis.Netlify.env && globalThis.Netlify.env.get('NETLIFY_BLOBS_CONTEXT'))
+    || (typeof process !== 'undefined' && process.env ? process.env.NETLIFY_BLOBS_CONTEXT : '');
+  if (typeof raw !== 'string' || !raw) return {};
+  try { return JSON.parse(Buffer.from(raw, 'base64').toString('utf8')); } catch (e) { return {}; }
+}
+
+export function blobs(context) {
+  const ctx = blobsContext();
+  if (!ctx.siteID && context && context.site && context.site.id) ctx.siteID = context.site.id;
+  const ok = !!(ctx.siteID && ctx.token && ctx.edgeURL);
+  const url = (base, key) => new URL(`/${ctx.siteID}/${STORE}/${encodeURIComponent(key)}`, base).toString();
+  return {
+    ok,
+    async get(key) {
+      if (!ok) throw new Error('Blobs context unavailable');
+      const r = await fetch(url(ctx.uncachedEdgeURL || ctx.edgeURL, key), { headers: { authorization: `Bearer ${ctx.token}` } });
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`Blobs GET ${key}: HTTP ${r.status}`);
+      const t = await r.text();
+      try { return JSON.parse(t); } catch (e) { return null; }
+    },
+    async set(key, value) {
+      if (!ok) throw new Error('Blobs context unavailable');
+      const r = await fetch(url(ctx.edgeURL, key), {
+        method: 'PUT',
+        headers: { authorization: `Bearer ${ctx.token}`, 'content-type': 'text/plain' },
+        body: JSON.stringify(value),
+      });
+      if (!r.ok) throw new Error(`Blobs PUT ${key}: HTTP ${r.status}`);
+    },
+  };
+}
+
+// ---------------------------------------------------------------- NTSB
+export const NTSB_API = 'https://api.ntsb.gov/public/api/Aviation/v1/';
+const env = k => (globalThis.Netlify ? Netlify.env.get(k) : process.env[k]);
+
+export async function ntsbGet(path, params, ms = 12000) {
+  const key = env('NTSB_API_KEY');
+  if (!key) throw new Error('NTSB_API_KEY is not set on this Netlify site');
+  const u = new URL(path, NTSB_API);
+  Object.entries(params || {}).forEach(([k, v]) => { if (v != null && v !== '') u.searchParams.set(k, v); });
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(u, {
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache', Accept: 'application/json' },
+      signal: ctl.signal,
+    });
+    if (r.status === 204) return [];
+    if (!r.ok) throw new Error(`NTSB answered ${r.status} for ${u.pathname}`);
+    const body = await r.json();
+    return Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+  } finally { clearTimeout(t); }
+}
+
+// Verified 22-Nov-2026 (GA Accident Stats ntsb-tail.mjs): cases for one N-number.
+export const casesForTail = tail => ntsbGet('GetAviationCasesFiltered/', { aircraftRegistrationNumber: tail });
+
+// Cases by event date. The parameter names live in RECENT_QUERY so they can be corrected in one place
+// once read from the developer portal's operation page (signed-in only). Until confirmed, poll.mjs reports
+// what NTSB answered in its run log and in status.json rather than guessing silently.
+export const RECENT_QUERY = { from: 'eventDateFrom', to: 'eventDateTo' };
+export const casesSince = (fromISO, toISO) =>
+  ntsbGet('GetAviationCasesFiltered/', { [RECENT_QUERY.from]: fromISO, [RECENT_QUERY.to]: toISO }, 25000);
+
+const num = v => (typeof v === 'number' && isFinite(v) ? v : 0);
+const str = v => (v == null ? '' : String(v).trim());
+export const tailKey = s => { let t = String(s || '').toUpperCase().replace(/[\s-]/g, ''); if (t && !t.startsWith('N')) t = 'N' + t; return t; };
+
+// Same field names as GA Accident Stats ntsb-tail.mjs (read from live answers 22-Nov-2026), plus the
+// aircraft category and engine fields used by isPiston() when NTSB supplies them.
+export function slimCase(c, tail) {
+  const acs = Array.isArray(c.aircrafts) ? c.aircrafts : [];
+  const ac = (tail && acs.find(a => tailKey(a.aircraftRegistrationNumber) === tail)) || acs[0] || {};
+  const narr = (Array.isArray(c.narratives) ? c.narratives : []).find(n => n.aircraftNumber === ac.aircraftNumber) || (c.narratives || [])[0] || {};
+  const d = (Array.isArray(ac.events) ? ac.events : []).find(e => e.isDefiningEvent);
+  const dmg = (Array.isArray(ac.aircraftAccidents) ? ac.aircraftAccidents : [])[0] || {};
+  const eng = (Array.isArray(ac.engines) ? ac.engines : [])[0] || {};
+  const make = str(ac.aircraftMake || ac.aircraftManufacturer), model = str(ac.aircraftModel);
+  const fam = family(make, model);
+  return {
+    ntsb: str(c.ntsbNumber),
+    mkey: typeof c.mKey === 'number' ? c.mKey : null,
+    type: str(c.eventType),
+    date: str(c.eventDate).slice(0, 10),
+    city: str(c.eventCity), st: str(c.eventStateOrRegion), country: str(c.eventCountry),
+    status: str(c.completionStatus),
+    closed: !!c.caseClosed,
+    reportDate: str(c.reportDate || c.originalPublishedDate).slice(0, 10),
+    highest: str(c.highestInjuryLevel),
+    fatal: num(c.totalFatal), serious: num(c.totalSerious), minor: num(c.totalMinor),
+    pc: str(narr.probableCause).slice(0, 1200),
+    def: d ? str(d.eventTier2Name) : '',
+    phase: d ? str(d.cicttPhaseSOEGroup) : '',
+    reg: tailKey(ac.aircraftRegistrationNumber),
+    make, model, yb: str(ac.yearOfManufacture),
+    damage: str(dmg.damageLevel),
+    cat: str(ac.aircraftCategory),
+    engType: str(eng.engineType || ac.engineType),
+    far: str(ac.regulationFlightConductedUnder || ac.federalRegulation || ''),
+    brand: fam[0] || '', fam: fam[1] || '',
+  };
+}
+
+// What a watcher cares about changing.
+export const fingerprint = c => [c.status, c.closed ? 1 : 0, c.reportDate, c.pc ? c.pc.length : 0, c.fatal, c.serious, c.highest].join('|');
+
+// ---------------------------------------------------------------- piston test + families
+// Port of GA Accident Stats build/families.py (brand + family regexes). Used to name the type and as a
+// fallback piston test when NTSB gives no engine type.
+const BR = [
+  [/^(CESSNA|TEXTRON AVIATION|REIMS)/, 'Cessna'], [/^(NEW )?PIPER(?! ?\/| -|-[A-Z])/, 'Piper'],
+  [/^(BEECH(?!ER)|BEECHCRAFT|RAYTHEON AIRCRAFT|HAWKER BEECHCRAFT|HAWKER$)/, 'Beech'],
+  [/^MOONEY( AIRCRAFT| AIRPLANE| INTERNATIONAL|$)/, 'Mooney'], [/^CIRRUS/, 'Cirrus'], [/^DIAMOND( AIRCRAFT|$)/, 'Diamond'],
+  [/^PILATUS(?!.*BRITTEN)/, 'Pilatus'], [/^(EADS[ -]SOCATA|SOCATA|AEROSPATIALE\/SOCATA|DAHER|COMPAGNIE DAHER)/, 'Daher'], [/^EPIC( AIRCRAFT|$)/, 'Epic'],
+];
+const FAM = [
+  ['Cirrus','SR20',/^SR ?20/],['Cirrus','SR22T',/^SR ?22 ?T/],['Cirrus','SR22',/^SR ?22/],
+  ['Diamond','DA20',/^DA ?20/],['Diamond','DA40 NG',/^DA ?40 ?(NG|D)\b|^DA ?40 ?NG|^DA40D/],['Diamond','DA40',/^DA ?40/],['Diamond','DA42',/^DA ?42/],['Diamond','DA62',/^DA ?62/],
+  ['Cessna','120/140',/^(120|140)/],['Cessna','150/152',/^(F|A|FA)?15[02]/],['Cessna','170',/^170/],
+  ['Cessna','172RG',/^172 ?RG/],['Cessna','172 Hawk XP',/^(F?R172|R172)/],['Cessna','172',/^(F|P)?172/],['Cessna','175',/^175/],
+  ['Cessna','177/Cardinal',/^177/],['Cessna','180/185',/^(A)?18[05]/],['Cessna','182',/^(F|R|T|TR|FR)?182/],['Cessna','195',/^19[05]/],
+  ['Cessna','205/206/207',/^(P|T|U|TU|TP)?20[567]|^210-5/],['Cessna','210',/^(P|T)?210/],
+  ['Cessna','350/400 (Columbia)',/^(LC4[012]|T240|400|350)/],
+  ['Cessna','310/320',/^T?-?3[12]0/],['Cessna','335/340',/^3(35|40)/],['Cessna','336/337',/^(M|T|P|F)?33[67]/],['Cessna','401-421 twins',/^4(01|02|11|14|21)/],
+  ['Piper','J-3 Cub',/^J-?3/],['Piper','PA-18 Super Cub',/^PA-?18/],['Piper','PA-22 Tri-Pacer/Colt',/^PA-?22/],
+  ['Piper','PA-28R Arrow',/^PA-?28R/],['Piper','PA-28 Cherokee/Warrior/Archer',/^PA-?28(-|$)/],
+  ['Piper','PA-32 Cherokee Six/Saratoga',/^PA-?32/],['Piper','PA-24 Comanche',/^PA-?24/],
+  ['Piper','PA-46 Meridian/M500/M600/M700',/^PA-?46R?-? ?(500|600|701) ?TP|^P46T/],['Piper','PA-46 Malibu/Mirage',/^PA-?46/],
+  ['Piper','PA-23 Apache/Aztec',/^PA-?23/],['Piper','PA-30/39 Twin Comanche',/^PA-?(30|39)/],['Piper','PA-34 Seneca',/^PA-?34/],
+  ['Piper','PA-38 Tomahawk',/^PA-?38/],['Piper','PA-44 Seminole',/^PA-?44/],['Piper','PA-31 Navajo',/^PA-?31/],['Piper','PA-12 Super Cruiser',/^PA-?12/],
+  ['Beech','Bonanza 35 (V-tail)',/^[A-Z]?35(?!-)[A-Z]?$|^[A-Z]35[AB]?$|^35$/],['Beech','Bonanza 33',/^(35-)?[A-Z]?33[A-Z]?$|^35-[A-Z]?33/],
+  ['Beech','Bonanza 36',/^[A-Z]?36/],['Beech','Musketeer/Sundowner/Sierra',/^[A-Z]?(19|23|24)([A-Z]?$|-|R$)/],
+  ['Beech','Baron 55/58',/^(95-)?[A-Z]?-?55|^[A-Z]?58/],['Beech','Travel Air 95',/^[A-Z]?95/],['Beech','Duchess 76',/^76/],['Beech','Skipper 77',/^77$/],
+  ['Pilatus','PC-12',/^PC[- ]?12/],['Epic','E1000',/^E ?1000/],['Daher','TBM',/^TBM/],
+  ['Mooney','M20 (C/E/F/G/J)',/^M-?20[CDEFGJ]/],['Mooney','M20K/M/R/S/TN/V',/^M-?20(K|M|R|S|TN|V|U)/],['Mooney','M20 early (A/B)',/^M-?20[AB]?$/],
+];
+const TURBOPROP = new Set(['PA-46 Meridian/M500/M600/M700', 'PC-12', 'E1000', 'TBM']);
+export function family(make, model) {
+  const m = String(make || '').toUpperCase();
+  const b = (BR.find(([r]) => r.test(m)) || [])[1];
+  if (!b) return [null, null];
+  let mo = String(model || '').toUpperCase().trim().replace(/^(CESSNA|PIPER|BEECH|MOONEY|CIRRUS|DIAMOND)\s+/, '').replace('PA ', 'PA-');
+  const f = FAM.find(([bb, , r]) => bb === b && r.test(mo));
+  return [b, f ? f[1] : null];
+}
+
+// Piston fixed-wing: NTSB category airplane and reciprocating engine when given; otherwise a known
+// piston family from the GA Accident Stats list.
+export function isPiston(c) {
+  const cat = c.cat.toUpperCase(), eng = c.engType.toUpperCase();
+  if (cat && !/^(AIR|AIRPLANE)/.test(cat)) return false;
+  if (eng) return /^(REC|RECIP)/.test(eng);
+  return !!c.fam && !TURBOPROP.has(c.fam);
+}
+
+// ---------------------------------------------------------------- ntfy
+// POST https://ntfy.sh/<topic>; headers Title, Priority (1-5), Tags, Click (docs.ntfy.sh/publish, 25-Nov-2026).
+// Email: ntfy.sh only forwards email for a signed-in account with a verified address (anonymous email
+// was disabled), 5 a day on the free plan. Set NTFY_TOKEN (an access token from that account) to enable it.
+export async function ntfy(topic, { title, body, priority = 3, tags = '', click = '', email = '' }) {
+  if (!/^[A-Za-z0-9_-]{12,64}$/.test(topic || '')) return { ok: false, why: 'bad topic' };
+  const h = { Title: asciiHeader(title), Priority: String(priority) };
+  if (tags) h.Tags = tags;
+  if (click) h.Click = click;
+  const tok = env('NTFY_TOKEN');
+  if (email && tok) { h.Email = email; h.Authorization = `Bearer ${tok}`; }
+  const r = await fetch('https://ntfy.sh/' + topic, { method: 'POST', headers: h, body: String(body || '').slice(0, 3800) });
+  return { ok: r.ok, status: r.status };
+}
+// HTTP headers must be plain ASCII; keep titles readable.
+const asciiHeader = s => String(s || '').normalize('NFKD').replace(/[^\x20-\x7E]/g, '').slice(0, 250);
+
+export const fmtDate = iso => {
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? `${m[3]}-${M[+m[2] - 1]}-${m[1]}` : '';
+};
+export const caseLine = c => `${fmtDate(c.date)} ${c.reg} ${c.make} ${c.model}, ${c.city}${c.st ? ', ' + c.st : ''}`;
+export const injuryText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : (c.highest || 'no injuries');
+export const reportPdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
+
+export const json = (status, body, extra = {}) => new Response(JSON.stringify(body), {
+  status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra },
+});

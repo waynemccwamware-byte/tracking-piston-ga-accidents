@@ -1,0 +1,9 @@
+# Netlify publishes the site/ folder as is. No build step, no npm packages (App Conventions §1).
+[build]
+  publish = "site"
+  command = ""
+
+# api.mjs (page calls) and poll.mjs (hourly scheduled check). Shared code is in netlify/lib/.
+# Needs the NTSB_API_KEY environment variable (secret, Functions scope). NTFY_TOKEN optional (email).
+[functions]
+  directory = "netlify/functions"
