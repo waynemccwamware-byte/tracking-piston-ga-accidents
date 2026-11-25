@@ -126,6 +126,7 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .ks.fatal .ks-n{ color:var(--alert); }
 .ks-l{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
 .ks-t:not(:empty)::before{ content:', '; color:var(--text-muted); }   /* v0.14: same line, wraps only if needed */
+.ks-t{ white-space:nowrap; }   /* the trend phrase wraps as one piece, never mid-phrase */
 .ks-t.good{ color:var(--teal); } .ks-t.bad{ color:var(--alert); } .ks-t.even{ color:var(--text-muted); }
 .ks-f{ font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.45; }
 .pick-btn{ all:unset; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; min-width:150px; max-width:260px;
@@ -365,7 +366,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.14</span>
+    <span class="ver mono">v0.15</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
