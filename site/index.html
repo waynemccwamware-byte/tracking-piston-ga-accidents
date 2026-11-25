@@ -125,6 +125,8 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .dd-acts{ display:flex; justify-content:space-between; gap:8px; margin-bottom:4px; }
 .dd-pop label.ck{ margin:3px 0; }
 .dd-pop .cnt{ color:var(--text-muted); font-size:11px; margin-left:4px; }
+.dd-pop .zero{ color:var(--text-muted); }
+.dd-h{ font:600 11px 'IBM Plex Sans',sans-serif; color:var(--amber); text-transform:uppercase; letter-spacing:.05em; margin:8px 0 2px; }
 .acc.short{ padding:5px 10px; cursor:pointer; }
 .acc-line{ display:flex; gap:8px; align-items:baseline; font-size:12.5px; white-space:nowrap; overflow:hidden; }
 .acc-line .d{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-muted); flex:none; }
@@ -328,7 +330,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.3</span>
+    <span class="ver mono">v0.4</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
@@ -477,7 +479,7 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters') || '{}'); } catch (e) { return {}; } })();
 const st = { cases: [], sev: saved0.sev || 'all', fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
   view: saved0.view === 'short' ? 'short' : 'full', q: '', shown: 40, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
-const OTHER = 'Other (not in GA Accident Stats types)';
+const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
 const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state, view: st.view }));
 const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
@@ -504,10 +506,11 @@ async function loadFeed() {
 
 function fillSelects() {
   const n = {}; st.cases.forEach(c => { n[famOf(c)] = (n[famOf(c)] || 0) + 1; });
-  const fams = Object.keys(n).filter(f => f !== OTHER).sort();
-  if (n[OTHER]) fams.push(OTHER);
-  st.fams.forEach(f => { if (!fams.includes(f)) fams.push(f); });   // a remembered type with no accidents yet stays ticked
-  $('famList').innerHTML = fams.map(f => `<label class="ck"><input type="checkbox" value="${esc(f)}"${st.fams.includes(f) ? ' checked' : ''}> <span>${esc(f)}<span class="cnt">${n[f] || 0}</span></span></label>`).join('');
+  const box = f => `<label class="ck${n[f] ? '' : ' zero'}"><input type="checkbox" value="${esc(f)}"${st.fams.includes(f) ? ' checked' : ''}> <span>${esc(f)}<span class="cnt">${n[f] || 0}</span></span></label>`;
+  let html = '', brand = '';
+  FAMB.forEach(([b, f]) => { if (b !== brand) { brand = b; html += `<div class="dd-h">${esc(b)}</div>`; } html += box(f); });
+  html += `<div class="dd-h">Everything else</div>` + box(OTHER);
+  $('famList').innerHTML = html;
   const sts = [...new Set(st.cases.map(c => c.st).filter(Boolean).concat(st.state ? [st.state] : []))].sort();
   $('stSel').innerHTML = '<option value="">All states</option>' + sts.map(s => `<option>${esc(s)}</option>`).join('');
   $('stSel').value = st.state;
@@ -589,10 +592,9 @@ $('list').addEventListener('click', async e => {
 });
 
 // ------------------------------------------------------------ profile
-const FAMS = ['120/140','150/152','170','172','172 Hawk XP','172RG','175','177/Cardinal','180/185','182','195','205/206/207','210','310/320','335/340','336/337','350/400 (Columbia)','401-421 twins',
-  'Baron 55/58','Bonanza 33','Bonanza 35 (V-tail)','Bonanza 36','Duchess 76','Musketeer/Sundowner/Sierra','Skipper 77','Travel Air 95',
-  'SR20','SR22','SR22T','DA20','DA40','DA40 NG','DA42','DA62','M20 (C/E/F/G/J)','M20 early (A/B)','M20K/M/R/S/TN/V',
-  'J-3 Cub','PA-12 Super Cruiser','PA-18 Super Cub','PA-22 Tri-Pacer/Colt','PA-23 Apache/Aztec','PA-24 Comanche','PA-28 Cherokee/Warrior/Archer','PA-28R Arrow','PA-30/39 Twin Comanche','PA-31 Navajo','PA-32 Cherokee Six/Saratoga','PA-34 Seneca','PA-38 Tomahawk','PA-44 Seminole','PA-46 Malibu/Mirage'];
+// GA Accident Stats' piston types by brand (its site/data/accidents.json meta.fams, 25-Nov-2026; turboprops left out).
+const FAMB = [["Beech", "Baron 55/58"], ["Beech", "Bonanza 33"], ["Beech", "Bonanza 35 (V-tail)"], ["Beech", "Bonanza 36"], ["Beech", "Duchess 76"], ["Beech", "Musketeer/Sundowner/Sierra"], ["Beech", "Skipper 77"], ["Beech", "Travel Air 95"], ["Cessna", "120/140"], ["Cessna", "150/152"], ["Cessna", "170"], ["Cessna", "172"], ["Cessna", "172 Hawk XP"], ["Cessna", "172RG"], ["Cessna", "175"], ["Cessna", "177/Cardinal"], ["Cessna", "180/185"], ["Cessna", "182"], ["Cessna", "195"], ["Cessna", "205/206/207"], ["Cessna", "210"], ["Cessna", "310/320"], ["Cessna", "335/340"], ["Cessna", "336/337"], ["Cessna", "350/400 (Columbia)"], ["Cessna", "401-421 twins"], ["Cirrus", "SR20"], ["Cirrus", "SR22"], ["Cirrus", "SR22T"], ["Diamond", "DA20"], ["Diamond", "DA40"], ["Diamond", "DA40 NG"], ["Diamond", "DA42"], ["Diamond", "DA62"], ["Mooney", "M20 (C/E/F/G/J)"], ["Mooney", "M20 early (A/B)"], ["Mooney", "M20K/M/R/S/TN/V"], ["Piper", "J-3 Cub"], ["Piper", "PA-12 Super Cruiser"], ["Piper", "PA-18 Super Cub"], ["Piper", "PA-22 Tri-Pacer/Colt"], ["Piper", "PA-23 Apache/Aztec"], ["Piper", "PA-24 Comanche"], ["Piper", "PA-28 Cherokee/Warrior/Archer"], ["Piper", "PA-28R Arrow"], ["Piper", "PA-30/39 Twin Comanche"], ["Piper", "PA-31 Navajo"], ["Piper", "PA-32 Cherokee Six/Saratoga"], ["Piper", "PA-34 Seneca"], ["Piper", "PA-38 Tomahawk"], ["Piper", "PA-44 Seminole"], ["Piper", "PA-46 Malibu/Mirage"]];
+const FAMS = FAMB.map(x => x[1]);
 const STATES = 'AK AL AR AZ CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA PR RI SC SD TN TX UT VA VI VT WA WI WV WY GU'.split(' ');
 
 function flash(t, bad) { const m = $('msg'); m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); clearTimeout(flash.t); flash.t = setTimeout(() => { m.textContent = ''; }, 6000); }
