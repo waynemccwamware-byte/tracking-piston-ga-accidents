@@ -125,6 +125,8 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .ks-n{ font:600 22px 'IBM Plex Mono',monospace; color:var(--text-primary); line-height:1.1; }
 .ks.fatal .ks-n{ color:var(--alert); }
 .ks-l{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+.ks-t{ font-size:11.5px; margin-top:3px; line-height:1.3; }
+.ks-t.good{ color:var(--teal); } .ks-t.bad{ color:var(--alert); } .ks-t.even{ color:var(--text-muted); }
 .ks-f{ font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.45; }
 .pick-btn{ all:unset; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; min-width:150px; max-width:260px;
   font:13px 'IBM Plex Sans',sans-serif; color:var(--text-primary); background:#0d1117; border:1px solid var(--bezel-hi); border-radius:6px; padding:7px 9px; cursor:pointer; }
@@ -363,7 +365,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.11</span>
+    <span class="ver mono">v0.12</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -374,7 +376,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <div class="ks-h" id="ksHead"></div>
       <div class="ks-row">
         <div class="ks"><span class="ks-n" id="ksTotal">–</span><span class="ks-l">Accidents</span></div>
-        <div class="ks fatal"><span class="ks-n" id="ksFatal">–</span><span class="ks-l">Fatal accidents</span></div>
+        <div class="ks fatal"><span class="ks-n" id="ksFatal">–</span><span class="ks-l">Fatal accidents</span><span class="ks-t" id="ksTrend"></span></div>
         <div class="ks fatal"><span class="ks-n" id="ksDead">–</span><span class="ks-l">Fatalities</span></div>
       </div>
       <div class="ks-f" id="ksFoot"></div>
@@ -555,6 +557,36 @@ function keyStats(d) {
   const filling = d.status && d.status.note ? ' Still filling in the earliest weeks, so these will rise.' : '';
   $('ksFoot').textContent = `NTSB accidents only (incidents left out), by event date, whatever the filters below are set to. NTSB lists cases days after they happen, and injury counts can be blank at first, so recent numbers run low.${filling}`;
   $('kstats').hidden = false;
+  trendLine(from);
+}
+
+// v0.12: fatal accidents against the trend (Wayne, 25-Nov-2026). Like for like: only the GA Accident Stats piston
+// types count on both sides, and only up to 14 days ago, since NTSB lists cases days late.
+//   expected = (straight-line trend of the last ten full years' fatal accidents, carried to this year)
+//              × (the average share of each year's fatal accidents that fell between the same two dates)
+//   n = expected − this year's count, rounded; "within normal variation" when |n| < 2 × √expected (Poisson).
+let TREND = null;
+async function trendLine(from) {
+  try {
+    if (!TREND) TREND = await (await fetch('data/trend.json', { cache: 'no-cache' })).json();
+    const cut = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    if (cut < from) { $('ksTrend').textContent = ''; return; }
+    const md = iso => +iso.slice(5, 7) * 100 + +iso.slice(8, 10);
+    const a = md(from), b = md(cut), ys = Object.keys(TREND.years).map(Number);
+    const tot = ys.map(y => TREND.years[y].length);
+    const share = ys.reduce((t, y, i) => t + TREND.years[y].filter(x => x >= a && x <= b).length / (tot[i] || 1), 0) / ys.length;
+    const n = ys.length, mx = ys.reduce((t, y) => t + y, 0) / n, my = tot.reduce((t, v) => t + v, 0) / n;
+    const slope = ys.reduce((t, y, i) => t + (y - mx) * (tot[i] - my), 0) / ys.reduce((t, y) => t + (y - mx) ** 2, 0);
+    const yr = +cut.slice(0, 4), expected = Math.max(0, (my + slope * (yr - mx)) * share);
+    const fams = new Set(TREND.fams);
+    const actual = st.cases.filter(c => c.fatal > 0 && c.date >= from && c.date <= cut && fams.has(c.fam) && (!c.type || /accident/i.test(c.type))).length;
+    const diff = Math.round(expected - actual), noise = diff !== 0 && Math.abs(expected - actual) < 2 * Math.sqrt(expected);
+    const el = $('ksTrend');
+    el.className = 'ks-t ' + (diff > 0 ? 'good' : diff < 0 ? 'bad' : 'even');
+    el.textContent = diff === 0 ? 'on trend' : `${Math.abs(diff)} ${diff > 0 ? 'better' : 'worse'} than trend${noise ? ' (within normal variation)' : ''}`;
+    el.title = `GA Accident Stats types only, ${dmy(from)} to ${dmy(cut)}: ${actual} fatal accidents this year against about ${expected.toFixed(1)} expected from the ${ys[0]}–${ys[ys.length - 1]} trend.`;
+    $('ksFoot').textContent += ` Trend: fatal accidents in GA Accident Stats' piston types only, from ${dmy(from)} to ${dmy(cut)} (14 days back, since NTSB lists late), compared with the straight-line trend of ${ys[0]}–${ys[ys.length - 1]} for the same dates: this year ${actual}, trend about ${expected.toFixed(1)}.`;
+  } catch (e) { $('ksTrend').textContent = ''; }
 }
 
 function fillSelects() {

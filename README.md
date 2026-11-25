@@ -50,6 +50,15 @@ rules, email, watches with what was last seen, recent pings).
   a cap are logged in the profile as "Not emailed (daily limit reached)".
 - Sender: pings@alerts.wamware.com (domain verified in Resend 25-Nov-2026). `PING_FROM` overrides it.
 
+## Fatal accidents vs. trend (v0.12)
+
+`site/data/trend.json` (built by `tools/build-trend.py` from GA Accident Stats' accidents.json) holds the
+month/day of every fatal accident in GA Accident Stats' piston types for the last ten full years. The page
+counts this year's fatal accidents in those same types from the start of the stats window to 14 days ago,
+and compares them with: straight-line trend of the ten yearly totals carried to this year × the average share
+of a year's fatal accidents falling between those dates. Differences smaller than 2 × √expected are labeled
+"within normal variation". Rebuild trend.json each January.
+
 ## Open items
 
 - FAA preliminary notices (next-day, 10 business days kept): no stable machine-readable URL found yet
