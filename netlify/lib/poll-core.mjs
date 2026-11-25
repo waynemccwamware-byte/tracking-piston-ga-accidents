@@ -52,7 +52,7 @@ export async function runPoll(context, { silent = false } = {}) {
   const T = today();
 
   // Every run stays inside the 30 s a scheduled function gets:
-  //   a) backfill: until it reaches 14 days ago, the next 10 days of event dates from 01-Oct-2026 (silent)
+  //   a) backfill: until it reaches 14 days ago, the next 30 days of event dates from 01-Oct-2026 (silent)
   //   b) the last 14 days by event date (new cases; NTSB usually lists a case days after the event)
   //   c) cases NTSB created or revised in the last 2 days (catches changes to older cases in the list)
   // Pings only start once the backfill is done, so the first runs don't ping weeks of old accidents.
@@ -71,7 +71,7 @@ export async function runPoll(context, { silent = false } = {}) {
   try {
     if (backfilling) {
       const from = state.backfillTo ? day(state.backfillTo, 1) : SINCE;
-      const to = [day(from, 9), recentFrom].sort()[0];
+      const to = [day(from, 29), recentFrom].sort()[0];
       take(await casesByEventDate(from, to), true);
       state.backfillTo = to;
       status.counts.backfill = `${from} to ${to}`;
