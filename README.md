@@ -48,7 +48,7 @@ rules, email, watches with what was last seen, recent pings).
 - Every ping and test email ends with a one-click stop link (`?op=unsub`).
 - Caps: 12 emails per profile per day and 90 in all per day (Resend free plan: 100 a day); pings over
   a cap are logged in the profile as "Not emailed (daily limit reached)".
-- Until a domain is verified in Resend, emails go only to the Resend account's own address.
+- Sender: pings@alerts.wamware.com (domain verified in Resend 25-Nov-2026). `PING_FROM` overrides it.
 
 ## Open items
 

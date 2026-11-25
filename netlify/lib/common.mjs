@@ -223,7 +223,8 @@ export function isPiston(c) {
 // (resend.com/docs/api-reference/emails/send-email, read 25-Nov-2026). Free plan: 3,000 a month, 100 a day.
 // Until a domain is verified in Resend, the sender must be onboarding@resend.dev and Resend delivers only to
 // the Resend account's own address (resend.com/docs/knowledge-base/403-error-resend-dev-domain). PING_FROM sets
-// the sender once a domain is verified, e.g. "Tracking Piston GA Accidents <alerts@wamware.com>".
+// a different sender. alerts.wamware.com was verified in Resend 25-Nov-2026 (DNS at Sierra Web / Domains Done Right),
+// so the default sender is pings@alerts.wamware.com.
 // ntfy was dropped 25-Nov-2026: its iPhone app showed pings only inside the app.
 export const emailReady = () => !!env('RESEND_API_KEY');
 // Sending caps (v0.11): Resend's free plan allows 100 emails a day, so stay under it with room for confirm emails.
@@ -243,7 +244,7 @@ export async function sendEmail(to, { title, body, click = '', unsub = '' }) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env('PING_FROM') || 'Tracking Piston GA Accidents <onboarding@resend.dev>', to: [to], subject: String(title || '').slice(0, 200), text }),
+    body: JSON.stringify({ from: env('PING_FROM') || 'Tracking Piston GA Accidents <pings@alerts.wamware.com>', to: [to], subject: String(title || '').slice(0, 200), text }),
   });
   let why = '';
   if (!r.ok) { try { why = (await r.json()).message || ''; } catch (e) { /* ignore */ } }
