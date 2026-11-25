@@ -79,8 +79,10 @@ export default async (req, context) => {
     if (op === 'case') {
       const n = String(url.searchParams.get('n') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
       if (!n) return json(400, { error: 'No case number' });
-      const r = await caseByNumber(n);
-      const rc = Array.isArray(r) ? r[0] : r;
+      // by number first; NTSB's GetAviationCase can come back empty for a brand-new case, so fall back to the tail
+      let rc = (await caseByNumber(n).catch(() => []))[0];
+      const t = tailKey(url.searchParams.get('tail'));
+      if (!rc && /^N[1-9][0-9A-Z]{0,4}$/.test(t)) rc = (await casesForTail(t)).find(c => String(c.ntsbNumber).toUpperCase() === n);
       return json(rc ? 200 : 404, rc ? { case: slimCase(rc) } : { error: 'NTSB has no case ' + n }, { 'Cache-Control': 'public, max-age=300' });
     }
 

@@ -643,7 +643,7 @@ async function checkWatch(w) {
   const k = wkey(w);
   LIVE.set(k, { loading: true }); drawWatches();
   try {
-    const r = await fetch(API + (w.kind === 'case' ? '?op=case&n=' : '?op=tail&q=') + encodeURIComponent(w.id));
+    const r = await fetch(API + (w.kind === 'case' ? '?op=case&tail=' + encodeURIComponent(w.tail || '') + '&n=' : '?op=tail&q=') + encodeURIComponent(w.id));
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
     const cases = w.kind === 'case' ? [d.case] : (d.cases || []);

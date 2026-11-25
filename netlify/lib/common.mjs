@@ -68,7 +68,10 @@ export async function ntsbGet(path, params, ms = 12000) {
     if (r.status === 204) return [];
     if (!r.ok) throw new Error(`NTSB answered ${r.status} for ${u.pathname}`);
     const body = await r.json();
-    return Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+    if (Array.isArray(body?.data)) return body.data;
+    if (Array.isArray(body)) return body;
+    if (body && body.data && typeof body.data === 'object') return [body.data];
+    return body && typeof body === 'object' && body.ntsbNumber ? [body] : [];
   } finally { clearTimeout(t); }
 }
 

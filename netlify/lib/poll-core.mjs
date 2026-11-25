@@ -93,13 +93,13 @@ export async function runPoll(context, { silent = false } = {}) {
   for (const code of codes.slice(0, 200)) { const p = await B.get('user/' + code); if (p) profiles.push(p); }
 
   // 3. watched N-numbers (and the tails of watched cases outside the list), five at a time
-  const tails = new Set(), caseIds = new Set();
-  profiles.forEach(p => (p.watches || []).forEach(w => { if (w.kind === 'tail') tails.add(w.tail); else caseIds.add(w.id); }));
+  const tails = new Set(), caseIds = new Set(), tailOf = new Map();
+  profiles.forEach(p => (p.watches || []).forEach(w => { if (w.kind === 'tail') tails.add(w.tail); else { caseIds.add(w.id); if (w.tail) tailOf.set(w.id, w.tail); } }));
   const byCase = new Map();
   const cl = [...caseIds].slice(0, 60);
   for (let i = 0; i < cl.length; i += 5) {
     await Promise.all(cl.slice(i, i + 5).map(async n => {
-      try { const r = await caseByNumber(n); const rc = Array.isArray(r) ? r[0] : r; if (rc) { const c = slimCase(rc); c.fp = fingerprint(c); byCase.set(n, c); } }
+      try { const r = await caseByNumber(n); let rc = r[0]; if (!rc) { const tw = tailOf.get(n); if (tw) rc = (await casesForTail(tw)).find(c => String(c.ntsbNumber).toUpperCase() === n); } if (rc) { const c = slimCase(rc); c.fp = fingerprint(c); byCase.set(n, c); } }
       catch (e) { byCase.set(n, null); }
     }));
   }
