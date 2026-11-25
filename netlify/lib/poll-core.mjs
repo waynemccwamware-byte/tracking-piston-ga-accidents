@@ -8,7 +8,7 @@
 //   user/<code> {code, topic, email, rules, watches, log}  one alert profile (see api.mjs)
 
 import {
-  blobs, SINCE, APP_URL, casesSince, casesForTail, slimCase, isPiston, fingerprint,
+  blobs, SINCE, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
   ntfy, caseLine, injuryText, reportPdf, fmtDate, tailKey,
 } from './common.mjs';
 
@@ -28,6 +28,9 @@ const describeChange = (o, c) => {
   const bits = [];
   if (!o) return ['new NTSB case ' + c.ntsb];
   if (o.status !== c.status) bits.push(`status ${o.status || '—'} → ${c.status || '—'}`);
+  if (o.profile !== c.profile && c.profile) bits.push(`${c.profile.toLowerCase()} report posted`);
+  if (o.factual !== c.factual && c.factual) bits.push('factual report posted');
+  if (o.docket !== c.docket && c.docket) bits.push('public docket opened');
   if (o.reportDate !== c.reportDate && c.reportDate) bits.push(`report dated ${fmtDate(c.reportDate)}`);
   if (!o.pc && c.pc) bits.push('probable cause published');
   if (!o.closed && c.closed) bits.push('case closed');
@@ -41,29 +44,46 @@ export async function runPoll(context, { silent = false } = {}) {
   const status = { lastRun: started, ok: false, error: '', counts: {}, note: '' };
   if (!B.ok) { status.error = 'Blobs unavailable'; return status; }
 
-  const state = (await B.get('cases')) || { asOf: null, cases: {} };
-  const seeding = !state.asOf;                  // first run: fill the list without pinging 8 weeks of accidents
+  const state = (await B.get('cases')) || { asOf: null, cases: {}, backfillTo: null };
   const prior = state.cases || {};
-  const now = {};
+  const now = { ...prior };
   const fresh = [], changed = [];
+  const day = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const T = today();
 
-  // 1. every case since SINCE
+  // Every run stays inside the 30 s a scheduled function gets:
+  //   a) backfill: until it reaches 14 days ago, the next 10 days of event dates from 01-Oct-2026 (silent)
+  //   b) the last 14 days by event date (new cases; NTSB usually lists a case days after the event)
+  //   c) cases NTSB created or revised in the last 2 days (catches changes to older cases in the list)
+  // Pings only start once the backfill is done, so the first runs don't ping weeks of old accidents.
+  const recentFrom = day(T, -14);
+  const backfilling = !state.backfillTo || state.backfillTo < recentFrom;
+  const take = (raw, quiet) => raw.forEach(rc => {
+    const c = slimCase(rc);
+    if (!c.ntsb || c.date < SINCE || !US(c.country) || (c.mode && !/aviation/i.test(c.mode)) || !isPiston(c)) return;
+    c.fp = fingerprint(c);
+    const o = prior[c.ntsb];
+    now[c.ntsb] = c;
+    if (quiet) return;
+    if (!o) fresh.push(c); else if (o.fp !== c.fp) changed.push([o, c]);
+  });
+  const errs = [];
   try {
-    const raw = await casesSince(SINCE, today());
-    raw.forEach(rc => {
-      const c = slimCase(rc);
-      if (!c.ntsb || !US(c.country) || !isPiston(c) || c.date < SINCE) return;
-      c.fp = fingerprint(c);
-      now[c.ntsb] = c;
-      const o = prior[c.ntsb];
-      if (!o) fresh.push(c); else if (o.fp !== c.fp) changed.push([o, c]);
-    });
-    status.counts.ntsbAnswered = raw.length;
-  } catch (e) {
-    status.error = 'Date query: ' + e.message;
-  }
-  // keep cases NTSB did not return this time (a failed or partial answer must not empty the list)
-  Object.keys(prior).forEach(k => { if (!now[k]) now[k] = prior[k]; });
+    if (backfilling) {
+      const from = state.backfillTo ? day(state.backfillTo, 1) : SINCE;
+      const to = [day(from, 9), recentFrom].sort()[0];
+      take(await casesByEventDate(from, to), true);
+      state.backfillTo = to;
+      status.counts.backfill = `${from} to ${to}`;
+    }
+  } catch (e) { errs.push('backfill: ' + e.message); }
+  const quiet = backfilling;
+  try { const raw = await casesByEventDate(recentFrom, T); take(raw, quiet); status.counts.recent = raw.length; }
+  catch (e) { errs.push('recent: ' + e.message); }
+  try { const raw = await casesModified(day(T, -2), T); take(raw, quiet); status.counts.modified = raw.length; }
+  catch (e) { errs.push('modified: ' + e.message); }
+  status.error = errs.join('; ');
+  const seeding = backfilling;
 
   // 2. alert profiles
   const codes = (await B.get('users')) || [];
@@ -71,8 +91,17 @@ export async function runPoll(context, { silent = false } = {}) {
   for (const code of codes.slice(0, 200)) { const p = await B.get('user/' + code); if (p) profiles.push(p); }
 
   // 3. watched N-numbers (and the tails of watched cases outside the list), five at a time
-  const tails = new Set();
-  profiles.forEach(p => (p.watches || []).forEach(w => { if (w.tail) tails.add(w.tail); }));
+  const tails = new Set(), caseIds = new Set();
+  profiles.forEach(p => (p.watches || []).forEach(w => { if (w.kind === 'tail') tails.add(w.tail); else caseIds.add(w.id); }));
+  const byCase = new Map();
+  const cl = [...caseIds].slice(0, 60);
+  for (let i = 0; i < cl.length; i += 5) {
+    await Promise.all(cl.slice(i, i + 5).map(async n => {
+      try { const r = await caseByNumber(n); const rc = Array.isArray(r) ? r[0] : r; if (rc) { const c = slimCase(rc); c.fp = fingerprint(c); byCase.set(n, c); } }
+      catch (e) { byCase.set(n, null); }
+    }));
+  }
+  status.counts.casesChecked = cl.length;
   const byTail = new Map();
   const tl = [...tails].slice(0, 60);
   for (let i = 0; i < tl.length; i += 5) {
@@ -113,8 +142,7 @@ export async function runPoll(context, { silent = false } = {}) {
       // candidates for this watch: the case itself, or every case on the tail
       let list = [];
       if (w.kind === 'case') {
-        const fromTail = (byTail.get(w.tail) || []).find(c => c.ntsb === w.id);
-        list = [fromTail || now[w.id]].filter(Boolean);
+        list = [byCase.get(w.id) || now[w.id]].filter(Boolean);
       } else {
         list = byTail.get(w.tail) || [];
       }
@@ -131,10 +159,10 @@ export async function runPoll(context, { silent = false } = {}) {
             priority: 4, tags: 'eyes', click: APP_URL + '?case=' + encodeURIComponent(c.ntsb),
           });
         }
-        w.fps[c.ntsb] = { fp: c.fp, c: { status: c.status, reportDate: c.reportDate, pc: c.pc ? 1 : 0, closed: c.closed, fatal: c.fatal, serious: c.serious } };
+        w.fps[c.ntsb] = { fp: c.fp, c: { status: c.status, profile: c.profile, factual: c.factual, docket: c.docket, reportDate: c.reportDate, pc: c.pc ? 1 : 0, closed: c.closed, fatal: c.fatal, serious: c.serious } };
         dirty = true;
       }
-      if (byTail.get(w.tail) !== null) { w.checked = started; dirty = true; }
+      if ((w.kind === 'tail' ? byTail.get(w.tail) : byCase.get(w.id)) != null) { w.checked = started; dirty = true; }
       const latest = list.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
       if (latest) w.latest = { ntsb: latest.ntsb, date: latest.date, status: latest.status, reportDate: latest.reportDate, highest: injuryText(latest), mkey: latest.mkey, make: latest.make, model: latest.model };
     }
@@ -142,11 +170,11 @@ export async function runPoll(context, { silent = false } = {}) {
   }
 
   state.cases = now;
-  if (!status.error) state.asOf = started;
+  state.asOf = started;
   await B.set('cases', state);
   status.ok = !status.error;
   status.counts = { ...status.counts, cases: Object.keys(now).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
-  status.note = seeding ? 'First run: list filled without pings.' : '';
+  status.note = seeding ? `Filling the list from 01-Oct-2026 (through ${state.backfillTo}); pings start when it's done.` : '';
   await B.set('status', status);
   return status;
 }

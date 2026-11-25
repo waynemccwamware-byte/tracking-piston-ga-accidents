@@ -75,12 +75,38 @@ export async function ntsbGet(path, params, ms = 12000) {
 // Verified 22-Nov-2026 (GA Accident Stats ntsb-tail.mjs): cases for one N-number.
 export const casesForTail = tail => ntsbGet('GetAviationCasesFiltered/', { aircraftRegistrationNumber: tail });
 
-// Cases by event date. The parameter names live in RECENT_QUERY so they can be corrected in one place
-// once read from the developer portal's operation page (signed-in only). Until confirmed, poll.mjs reports
-// what NTSB answered in its run log and in status.json rather than guessing silently.
-export const RECENT_QUERY = { from: 'eventDateFrom', to: 'eventDateTo' };
-export const casesSince = (fromISO, toISO) =>
-  ntsbGet('GetAviationCasesFiltered/', { [RECENT_QUERY.from]: fromISO, [RECENT_QUERY.to]: toISO }, 25000);
+// Verified 25-Nov-2026 in the developer portal (signed in, "Try it" with Wayne's key):
+//   Common/v2/GetCasesByDateRange?startDate=MM/DD/YYYY&endDate=MM/DD/YYYY&mode=aviation[&marker=]
+//     -> {startDate, endDate, pageSize, hasMore, nextMarker, data:[cases]}; event-date range, inclusive,
+//        up to 1000 per page, same case shape as the Aviation operations.
+//   Common/v1/GetCasesByModifiedDateRange?startDate&endDate  (cases created or revised in the range)
+//   Aviation/v1/GetAviationCase?ntsbNumber=  (one case)
+const mdy = iso => { const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
+export async function casesByEventDate(fromISO, toISO) {
+  const out = [];
+  let marker = '';
+  for (let page = 0; page < 5; page++) {
+    const key = env('NTSB_API_KEY');
+    if (!key) throw new Error('NTSB_API_KEY is not set on this Netlify site');
+    const u = new URL('https://api.ntsb.gov/public/api/Common/v2/GetCasesByDateRange/');
+    u.searchParams.set('startDate', mdy(fromISO)); u.searchParams.set('endDate', mdy(toISO)); u.searchParams.set('mode', 'aviation');
+    if (marker) u.searchParams.set('marker', marker);
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(u, { headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache', Accept: 'application/json' }, signal: ctl.signal });
+      if (r.status === 204) break;
+      if (!r.ok) throw new Error(`NTSB answered ${r.status} for GetCasesByDateRange`);
+      const b = await r.json();
+      (Array.isArray(b.data) ? b.data : []).forEach(c => out.push(c));
+      if (!b.hasMore || !b.nextMarker) break;
+      marker = b.nextMarker;
+    } finally { clearTimeout(t); }
+  }
+  return out;
+}
+export const casesModified = (fromISO, toISO) =>
+  ntsbGet('https://api.ntsb.gov/public/api/Common/v1/GetCasesByModifiedDateRange/', { startDate: mdy(fromISO), endDate: mdy(toISO) }, 20000);
+export const caseByNumber = n => ntsbGet('GetAviationCase/', { ntsbNumber: n });
 
 const num = v => (typeof v === 'number' && isFinite(v) ? v : 0);
 const str = v => (v == null ? '' : String(v).trim());
@@ -104,6 +130,10 @@ export function slimCase(c, tail) {
     date: str(c.eventDate).slice(0, 10),
     city: str(c.eventCity), st: str(c.eventStateOrRegion), country: str(c.eventCountry),
     status: str(c.completionStatus),
+    profile: str(c.publishProfile),
+    docket: str(c.docketOpenDate).slice(0, 10),
+    factual: str(c.factualPublishedDate).slice(0, 10),
+    mode: str(c.mode),
     closed: !!c.caseClosed,
     reportDate: str(c.reportDate || c.originalPublishedDate).slice(0, 10),
     highest: str(c.highestInjuryLevel),
@@ -116,13 +146,14 @@ export function slimCase(c, tail) {
     damage: str(dmg.damageLevel),
     cat: str(ac.aircraftCategory),
     engType: str(eng.engineType || ac.engineType),
+    amateur: !!ac.aircraftAmateurBuilt,
     far: str(ac.regulationFlightConductedUnder || ac.federalRegulation || ''),
     brand: fam[0] || '', fam: fam[1] || '',
   };
 }
 
 // What a watcher cares about changing.
-export const fingerprint = c => [c.status, c.closed ? 1 : 0, c.reportDate, c.pc ? c.pc.length : 0, c.fatal, c.serious, c.highest].join('|');
+export const fingerprint = c => [c.status, c.profile, c.closed ? 1 : 0, c.reportDate, c.factual, c.docket, c.pc ? c.pc.length : 0, c.fatal, c.serious, c.highest].join('|');
 
 // ---------------------------------------------------------------- piston test + families
 // Port of GA Accident Stats build/families.py (brand + family regexes). Used to name the type and as a
@@ -164,13 +195,22 @@ export function family(make, model) {
   return [b, f ? f[1] : null];
 }
 
-// Piston fixed-wing: NTSB category airplane and reciprocating engine when given; otherwise a known
-// piston family from the GA Accident Stats list.
+// Piston fixed-wing. Early NTSB records often have no aircraft category and no engines yet (seen 25-Nov-2026:
+// a new Cessna 210D case with category null, engines []), so:
+//   category given and not Airplane -> out;  engine type given -> reciprocating only;
+//   otherwise a known piston family is in, a known turbine/jet/rotorcraft make or model is out, and
+//   anything else (homebuilts, Maules, Citabrias…) is in, marked "engine not yet stated".
+const NOT_PISTON_MAKE = /^(BOEING|AIRBUS|EMBRAER|BOMBARDIER|CANADAIR|GULFSTREAM|LEARJET|DASSAULT|HONDA AIRCRAFT|HONDAJET|ATR|DE HAVILLAND CANADA|VIKING AIR|SAAB|FOKKER|MCDONNELL|LOCKHEED|ROBINSON|BELL|SIKORSKY|EUROCOPTER|AIRBUS HELICOPTERS|AGUSTA|LEONARDO|MD HELICOPTERS|HUGHES|ENSTROM|SCHWEIZER|HILLER|KAMAN|AIR TRACTOR|THRUSH|AYRES|QUEST|KODIAK|DAHER|SOCATA|EPIC|PILATUS|ECLIPSE|CIRRUS DESIGN CORP VISION|BEECH(CRAFT)? (KING|PREMIER)|TEXTRON (BELL|EAVIATION))/;
+const NOT_PISTON_MODEL = /^(208|CITATION|5\d\d|6\d\d|7\d\d|C-?208|PA-?31T|PA-?42|PA-?46-?(500|600|701)TP|B?200|B?300|350|C?90|E?90|F90|1900|99|SF50|TBM|PC-?(6|12|24)|AT-?(5|6|8)\d\d|DHC-?[2-8]|R(22|44|66)|EC|AS ?3|BO-?105|BK|UH|OH|MD ?(5|9)|369)/;
 export function isPiston(c) {
   const cat = c.cat.toUpperCase(), eng = c.engType.toUpperCase();
-  if (cat && !/^(AIR|AIRPLANE)/.test(cat)) return false;
-  if (eng) return /^(REC|RECIP)/.test(eng);
-  return !!c.fam && !TURBOPROP.has(c.fam);
+  if (cat && !/^AIRPLANE/.test(cat)) return false;
+  if (eng) return /RECIP/.test(eng);
+  if (c.fam) return !TURBOPROP.has(c.fam);
+  const mk = c.make.toUpperCase(), mo = c.model.toUpperCase().replace(/^(CESSNA|PIPER|BEECH)\s+/, '');
+  if (NOT_PISTON_MAKE.test(mk)) return false;
+  if (/^(CESSNA|TEXTRON|BEECH|PIPER|HAWKER|RAYTHEON)/.test(mk) && NOT_PISTON_MODEL.test(mo)) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------- ntfy
@@ -188,7 +228,7 @@ export async function ntfy(topic, { title, body, priority = 3, tags = '', click 
   return { ok: r.ok, status: r.status };
 }
 // HTTP headers must be plain ASCII; keep titles readable.
-const asciiHeader = s => String(s || '').normalize('NFKD').replace(/[^\x20-\x7E]/g, '').slice(0, 250);
+const asciiHeader = s => String(s || '').replace(/→/g, '->').normalize('NFKD').replace(/[^\x20-\x7E]/g, '').slice(0, 250);
 
 export const fmtDate = iso => {
   const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

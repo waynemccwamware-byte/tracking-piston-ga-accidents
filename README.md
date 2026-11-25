@@ -31,13 +31,13 @@ rules, push/email, watches with what was last seen, recent pings).
 
 ## How the check works
 
-1. Ask NTSB for every case with an event date from 01-Oct-2026 to today (query names in `RECENT_QUERY`).
+1. Ask NTSB (Common/v2/GetCasesByDateRange, mode=aviation) for the last 14 days of event dates and for cases revised in the last 2 days (Common/v1/GetCasesByModifiedDateRange); first runs backfill 01-Oct-2026 on, 10 days a run, without pinging.
 2. Keep US cases where NTSB lists an airplane with a reciprocating engine, or, without an engine type,
    a model in GA Accident Stats' piston families (port of `build/families.py`).
 3. New cases ping profiles whose rules match (fatal always, unless turned off). The very first run fills
    the list without pinging.
 4. Each watched N-number is asked for by tail (`GetAviationCasesFiltered?aircraftRegistrationNumber=`,
-   checked 22-Nov-2026). A change in status, report date, probable cause, closure or injury counts pings.
+   checked 22-Nov-2026); each watched case by number (Aviation/v1/GetAviationCase?ntsbNumber=, checked 25-Nov-2026). A change in status, report type, factual report, docket, report date, probable cause, closure or injury counts pings.
 
 ## Open items
 
