@@ -439,7 +439,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp
 const tailKey = s => { let t = String(s || '').toUpperCase().replace(/[\s-]/g, ''); if (t && !t.startsWith('N')) t = 'N' + t; return t; };
 const okTail = t => /^N[1-9][0-9A-Z]{0,4}$/.test(t);
 const sevOf = c => c.fatal ? 'fatal' : c.serious ? 'serious' : c.minor ? 'minor' : 'none';
-const injText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : 'No injuries';
+const injText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : c.highest ? 'No injuries' : 'Injuries not yet stated by NTSB';
 const pdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
 const reg = t => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${encodeURIComponent(t)}`;
 const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },

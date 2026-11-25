@@ -206,8 +206,10 @@ export function isPiston(c) {
   const cat = c.cat.toUpperCase(), eng = c.engType.toUpperCase();
   if (cat && !/^AIRPLANE/.test(cat)) return false;
   if (eng) return /RECIP/.test(eng);
-  if (c.fam) return !TURBOPROP.has(c.fam);
   const mk = c.make.toUpperCase(), mo = c.model.toUpperCase().replace(/^(CESSNA|PIPER|BEECH)\s+/, '');
+  // turbine versions that the piston family regexes would otherwise catch (PA-31T Cheyenne, Lancair IV-P-T Propjet)
+  if (/^PA-?31T|^PA-?42|IV-?P-?T\b|PROPJET|JETPROP/.test(mo)) return false;
+  if (c.fam) return !TURBOPROP.has(c.fam);
   if (NOT_PISTON_MAKE.test(mk)) return false;
   if (/^(CESSNA|TEXTRON|BEECH|PIPER|HAWKER|RAYTHEON)/.test(mk) && NOT_PISTON_MODEL.test(mo)) return false;
   return true;
@@ -236,7 +238,7 @@ export const fmtDate = iso => {
   return m ? `${m[3]}-${M[+m[2] - 1]}-${m[1]}` : '';
 };
 export const caseLine = c => `${fmtDate(c.date)} ${c.reg} ${c.make} ${c.model}, ${c.city}${c.st ? ', ' + c.st : ''}`;
-export const injuryText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : (c.highest || 'no injuries');
+export const injuryText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : c.highest ? 'no injuries' : 'injuries not yet stated';
 export const reportPdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
 
 export const json = (status, body, extra = {}) => new Response(JSON.stringify(body), {
