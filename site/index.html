@@ -116,6 +116,21 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .watch-btn[aria-pressed="true"]{ color:var(--amber); border-color:var(--amber-dim); background:rgba(245,166,35,.08); }
 .pc{ font-size:12px; color:var(--text-primary); margin-top:6px; line-height:1.45; border-top:1px dashed var(--bezel); padding-top:6px; }
 .more{ margin-top:8px; text-align:center; }
+.dd{ position:relative; }
+.dd summary{ list-style:none; cursor:pointer; font:13px 'IBM Plex Sans',sans-serif; color:var(--text-primary); background:#0d1117; border:1px solid var(--bezel-hi); border-radius:6px; padding:7px 26px 7px 9px; max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dd summary::-webkit-details-marker{ display:none; }
+.dd summary::after{ content:'▾'; position:absolute; right:9px; top:7px; color:var(--text-muted); }
+.dd[open] summary{ border-color:var(--amber-dim); }
+.dd-pop{ position:absolute; z-index:5; top:calc(100% + 4px); left:0; width:min(320px, 86vw); max-height:340px; overflow:auto; background:#0d1117; border:1px solid var(--bezel-hi); border-radius:8px; padding:8px 10px; box-shadow:0 6px 24px rgba(0,0,0,.5); }
+.dd-acts{ display:flex; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.dd-pop label.ck{ margin:3px 0; }
+.dd-pop .cnt{ color:var(--text-muted); font-size:11px; margin-left:4px; }
+.acc.short{ padding:5px 10px; cursor:pointer; }
+.acc-line{ display:flex; gap:8px; align-items:baseline; font-size:12.5px; white-space:nowrap; overflow:hidden; }
+.acc-line .d{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-muted); flex:none; }
+.acc-line .r{ font-family:'IBM Plex Mono',monospace; color:var(--amber); flex:none; }
+.acc-line .t{ overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; }
+.acc-line .w{ flex:none; color:var(--amber); }
 .empty{ font-size:12.5px; color:var(--text-muted); padding:10px 2px; }
 
 .wl{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
@@ -308,7 +323,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.1</span>
+    <span class="ver mono">v0.2</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
@@ -316,7 +331,8 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
   <div class="panel">
 
     <section class="step" id="secList">
-      <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub">since 01-Oct-2026</span></h2>
+      <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub">event dates from 01-Oct-2026 to today</span></h2>
+      <p class="note" style="margin-top:-2px">A fixed start date, not a rolling window or a quarter: the list keeps growing from 01-Oct-2026. Newest accident first. NTSB usually lists a case several days after it happens.</p>
       <p class="status" id="status">Loading…</p>
       <div class="ctls">
         <div class="seg" id="sevSeg" role="group" aria-label="Severity">
@@ -324,9 +340,15 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
           <button type="button" data-v="fatal" aria-pressed="false">Fatal</button>
           <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
         </div>
-        <select id="famSel" aria-label="Aircraft type"><option value="">All types</option></select>
+        <details class="dd" id="famDD"><summary id="famSum">All types</summary>
+          <div class="dd-pop"><div class="dd-acts"><button type="button" class="btn sm" id="famAll">All types</button><button type="button" class="btn sm" id="famDone">Done</button></div><div id="famList"></div></div>
+        </details>
         <select id="stSel" aria-label="State"><option value="">All states</option></select>
         <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
+        <div class="seg" id="viewSeg" role="group" aria-label="Detail">
+          <button type="button" data-v="short" aria-pressed="false">Short</button>
+          <button type="button" data-v="full" aria-pressed="true">Full</button>
+        </div>
       </div>
       <div class="list" id="list"></div>
       <div class="more" id="moreWrap" hidden><button class="btn sm" id="moreBtn" type="button">Show more</button></div>
@@ -445,7 +467,13 @@ const reg = t => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?
 const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
              set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
 
-const st = { cases: [], sev: 'all', fam: '', state: '', q: '', shown: 40, focus: new URLSearchParams(location.search).get('case') || '' };
+// Filters and the Short/Full choice are remembered on this device (v0.2); the search box is not.
+const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters') || '{}'); } catch (e) { return {}; } })();
+const st = { cases: [], sev: saved0.sev || 'all', fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
+  view: saved0.view === 'short' ? 'short' : 'full', q: '', shown: 40, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
+const OTHER = 'Other (not in GA Accident Stats types)';
+const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state, view: st.view }));
+const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
 
 // ------------------------------------------------------------ feed
@@ -462,16 +490,22 @@ async function loadFeed() {
     $('status').innerHTML = line;
     fillSelects();
     render();
+    if (st.focus) st.open.add(st.focus);
+    render();
     if (st.focus) { const el = document.getElementById('c-' + st.focus); if (el) el.scrollIntoView({ block: 'center' }); }
   } catch (e) { $('status').innerHTML = '<span class="bad">Couldn\'t load the accident list.</span>'; }
 }
 
 function fillSelects() {
-  const fams = [...new Set(st.cases.map(c => c.fam).filter(Boolean))].sort();
-  const sts = [...new Set(st.cases.map(c => c.st).filter(Boolean))].sort();
-  $('famSel').innerHTML = '<option value="">All types</option>' + fams.map(f => `<option>${esc(f)}</option>`).join('');
+  const n = {}; st.cases.forEach(c => { n[famOf(c)] = (n[famOf(c)] || 0) + 1; });
+  const fams = Object.keys(n).filter(f => f !== OTHER).sort();
+  if (n[OTHER]) fams.push(OTHER);
+  st.fams.forEach(f => { if (!fams.includes(f)) fams.push(f); });   // a remembered type with no accidents yet stays ticked
+  $('famList').innerHTML = fams.map(f => `<label class="ck"><input type="checkbox" value="${esc(f)}"${st.fams.includes(f) ? ' checked' : ''}> <span>${esc(f)}<span class="cnt">${n[f] || 0}</span></span></label>`).join('');
+  const sts = [...new Set(st.cases.map(c => c.st).filter(Boolean).concat(st.state ? [st.state] : []))].sort();
   $('stSel').innerHTML = '<option value="">All states</option>' + sts.map(s => `<option>${esc(s)}</option>`).join('');
-  $('famSel').value = st.fam; $('stSel').value = st.state;
+  $('stSel').value = st.state;
+  famSummary(); syncSegs();
   $('rFamAdd').innerHTML = '<option value="">+ type (any if none)</option>' + FAMS.map(f => `<option>${esc(f)}</option>`).join('');
   $('rStAdd').innerHTML = '<option value="">+ state (any if none)</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 }
@@ -482,7 +516,7 @@ function render() {
   const q = st.q.trim().toUpperCase();
   const list = st.cases.filter(c =>
     (st.sev === 'all' || (st.sev === 'fatal' ? c.fatal > 0 : (c.fatal > 0 || c.serious > 0))) &&
-    (!st.fam || c.fam === st.fam) && (!st.state || c.st === st.state) &&
+    (!st.fams.length || st.fams.includes(famOf(c))) && (!st.state || c.st === st.state) &&
     (!q || [c.reg, c.city, c.make, c.model, c.ntsb, c.fam].join(' ').toUpperCase().includes(q)));
   const rows = list.slice(0, st.shown).map(c => {
     const sev = sevOf(c);
@@ -495,12 +529,16 @@ function render() {
       c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
     ].filter(Boolean).join('');
     const w = watching(c);
+    if (st.view === 'short' && !st.open.has(c.ntsb)) {
+      return `<div class="acc short ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}" data-open="${esc(c.ntsb)}" title="Tap for details">
+        <div class="acc-line"><span class="d">${dmy(c.date)}</span><span class="r">${esc(c.reg)}</span><span class="t">${esc(c.fam || (c.make + ' ' + c.model))} · <span class="inj ${sev}">${c.fatal || c.serious || c.minor || c.highest ? injText(c) : 'injuries n/s'}</span>${c.st ? ' · ' + esc(c.st) : ''}</span>${w ? '<span class="w">★</span>' : ''}</div></div>`;
+    }
     return `<div class="acc ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
       <div class="acc-top"><span class="acc-ac">${esc(c.make)} ${esc(c.model)}<span class="reg">${esc(c.reg)}</span></span><span class="acc-date">${dmy(c.date)}</span></div>
       <div class="acc-mid"><span class="inj ${sev}">${injText(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
       <div class="acc-meta">${meta ? esc(meta) + '<br>' : ''}${statusTxt}</div>
       ${c.pc ? `<div class="pc"><b>NTSB probable cause:</b> ${esc(c.pc)}</div>` : ''}
-      <div class="acc-links">${links}<button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
+      <div class="acc-links">${links}${st.view === 'short' ? `<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▲ Less</button>` : ''}<button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
     </div>`;
   });
   $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
@@ -509,15 +547,33 @@ function render() {
 
 $('sevSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  st.sev = b.dataset.v; st.shown = 40;
-  [...$('sevSeg').children].forEach(x => x.setAttribute('aria-pressed', x === b));
-  render();
+  st.sev = b.dataset.v; st.shown = 40; keepFilters(); syncSegs(); render();
 });
-$('famSel').onchange = e => { st.fam = e.target.value; st.shown = 40; render(); };
-$('stSel').onchange = e => { st.state = e.target.value; st.shown = 40; render(); };
+$('viewSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  st.view = b.dataset.v; st.open.clear(); keepFilters(); syncSegs(); render();
+});
+function syncSegs() {
+  [...$('sevSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.sev));
+  [...$('viewSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.view));
+}
+function famSummary() {
+  $('famSum').textContent = !st.fams.length ? 'All types' : st.fams.length === 1 ? st.fams[0] : `${st.fams.length} types`;
+}
+$('famList').addEventListener('change', () => {
+  st.fams = [...$('famList').querySelectorAll('input:checked')].map(i => i.value);
+  st.shown = 40; keepFilters(); famSummary(); render();
+});
+$('famAll').onclick = () => { st.fams = []; $('famList').querySelectorAll('input').forEach(i => { i.checked = false; }); keepFilters(); famSummary(); render(); };
+$('famDone').onclick = () => { $('famDD').open = false; };
+document.addEventListener('click', e => { if ($('famDD').open && !e.target.closest('#famDD')) $('famDD').open = false; });
+$('stSel').onchange = e => { st.state = e.target.value; st.shown = 40; keepFilters(); render(); };
 $('q').oninput = e => { st.q = e.target.value; st.shown = 40; render(); };
 $('moreBtn').onclick = () => { st.shown += 40; render(); };
 $('list').addEventListener('click', async e => {
+  const cl = e.target.closest('[data-close]');
+  if (cl) { st.open.delete(cl.dataset.close); render(); return; }
+  if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { st.open.add(o.dataset.open); render(); return; } }
   const b = e.target.closest('.watch-btn'); if (!b) return;
   if (!P) { $('secAlerts').scrollIntoView({ block: 'start', behavior: 'smooth' }); flash('Set up your alerts first, then tap Watch again.', true); return; }
   const id = b.dataset.case, tail = b.dataset.tail;
