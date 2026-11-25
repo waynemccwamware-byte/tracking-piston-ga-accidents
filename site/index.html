@@ -131,6 +131,8 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .acc-line .r{ font-family:'IBM Plex Mono',monospace; color:var(--amber); flex:none; }
 .acc-line .t{ overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; }
 .acc-line .w{ flex:none; color:var(--amber); }
+.acc-line .x{ flex:none; color:var(--text-muted); font-size:11px; }
+.acc-line.l2{ font-size:12px; color:var(--text-muted); margin-top:1px; }
 .empty{ font-size:12.5px; color:var(--text-muted); padding:10px 2px; }
 
 .wl{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
@@ -345,9 +347,9 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
         </details>
         <select id="stSel" aria-label="State"><option value="">All states</option></select>
         <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
-        <div class="seg" id="viewSeg" role="group" aria-label="Detail">
-          <button type="button" data-v="short" aria-pressed="false">Short</button>
-          <button type="button" data-v="full" aria-pressed="true">Full</button>
+        <div class="seg" id="viewSeg" role="group" aria-label="Rows">
+          <button type="button" data-v="short" aria-pressed="false">All closed</button>
+          <button type="button" data-v="full" aria-pressed="true">All open</button>
         </div>
       </div>
       <div class="list" id="list"></div>
@@ -490,7 +492,7 @@ async function loadFeed() {
     $('status').innerHTML = line;
     fillSelects();
     render();
-    if (st.focus) st.open.add(st.focus);
+    if (st.focus) { st.open.add(st.focus); st.open.delete('-' + st.focus); }
     render();
     if (st.focus) { const el = document.getElementById('c-' + st.focus); if (el) el.scrollIntoView({ block: 'center' }); }
   } catch (e) { $('status').innerHTML = '<span class="bad">Couldn\'t load the accident list.</span>'; }
@@ -529,16 +531,17 @@ function render() {
       c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
     ].filter(Boolean).join('');
     const w = watching(c);
-    if (st.view === 'short' && !st.open.has(c.ntsb)) {
-      return `<div class="acc short ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}" data-open="${esc(c.ntsb)}" title="Tap for details">
-        <div class="acc-line"><span class="d">${dmy(c.date)}</span><span class="r">${esc(c.reg)}</span><span class="t">${esc(c.fam || (c.make + ' ' + c.model))} · <span class="inj ${sev}">${c.fatal || c.serious || c.minor || c.highest ? injText(c) : 'injuries n/s'}</span>${c.st ? ' · ' + esc(c.st) : ''}</span>${w ? '<span class="w">★</span>' : ''}</div></div>`;
+    if (st.view === 'short' ? !st.open.has(c.ntsb) : st.open.has('-' + c.ntsb)) {
+      return `<div class="acc short ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}" data-open="${esc(c.ntsb)}" title="Tap to open the full record">
+        <div class="acc-line"><span class="d">${dmy(c.date)}</span><span class="r">${esc(c.reg)}</span><span class="t">${esc(c.make)} ${esc(c.model)}</span>${w ? '<span class="w">★</span>' : ''}<span class="x">▾</span></div>
+        <div class="acc-line l2"><span class="t"><span class="inj ${sev}">${injText(c)}</span>${loc ? ' · ' + esc(loc) : ''}${c.def ? ' · ' + esc(c.def) : ''}</span></div></div>`;
     }
     return `<div class="acc ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
       <div class="acc-top"><span class="acc-ac">${esc(c.make)} ${esc(c.model)}<span class="reg">${esc(c.reg)}</span></span><span class="acc-date">${dmy(c.date)}</span></div>
       <div class="acc-mid"><span class="inj ${sev}">${injText(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
       <div class="acc-meta">${meta ? esc(meta) + '<br>' : ''}${statusTxt}</div>
       ${c.pc ? `<div class="pc"><b>NTSB probable cause:</b> ${esc(c.pc)}</div>` : ''}
-      <div class="acc-links">${links}${st.view === 'short' ? `<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▲ Less</button>` : ''}<button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
+      <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button><button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
     </div>`;
   });
   $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
@@ -572,8 +575,8 @@ $('q').oninput = e => { st.q = e.target.value; st.shown = 40; render(); };
 $('moreBtn').onclick = () => { st.shown += 40; render(); };
 $('list').addEventListener('click', async e => {
   const cl = e.target.closest('[data-close]');
-  if (cl) { st.open.delete(cl.dataset.close); render(); return; }
-  if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { st.open.add(o.dataset.open); render(); return; } }
+  if (cl) { if (st.view === 'short') st.open.delete(cl.dataset.close); else st.open.add('-' + cl.dataset.close); render(); return; }
+  if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { if (st.view === 'short') st.open.add(o.dataset.open); else st.open.delete('-' + o.dataset.open); render(); return; } }
   const b = e.target.closest('.watch-btn'); if (!b) return;
   if (!P) { $('secAlerts').scrollIntoView({ block: 'start', behavior: 'smooth' }); flash('Set up your alerts first, then tap Watch again.', true); return; }
   const id = b.dataset.case, tail = b.dataset.tail;
