@@ -365,7 +365,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.12</span>
+    <span class="ver mono">v0.13</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -388,8 +388,8 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <p class="status" id="status">Loading…</p>
       <div class="ctls">
         <div class="seg" id="sevSeg" role="group" aria-label="Severity">
-          <button type="button" data-v="all" aria-pressed="true">All</button>
-          <button type="button" data-v="fatal" aria-pressed="false">Fatal</button>
+          <button type="button" data-v="all" aria-pressed="false">All</button>
+          <button type="button" data-v="fatal" aria-pressed="true">Fatal</button>
           <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
         </div>
         <button type="button" class="pick-btn" id="famBtn" aria-expanded="false"><span class="pv" id="famSum">All types</span><span class="caret">▾</span></button>
@@ -512,12 +512,13 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
              set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
 
 // Filters and the Short/Full choice are remembered on this device (v0.2); the search box is not.
-const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters') || '{}'); } catch (e) { return {}; } })();
-const st = { cases: [], sev: saved0.sev || 'all', fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
+const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters2') || '{}'); } catch (e) { return {}; } })();
+const st = { cases: [], sev: saved0.sev || 'fatal',   // v0.13: Fatal by default (Wayne, 25-Nov-2026)
+  fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
   view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
   q: '', shown: 20, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
 const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
-const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state }));
+const keepFilters = () => LS.set('tpga-filters2', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state }));
 const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
 
