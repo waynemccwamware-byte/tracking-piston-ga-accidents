@@ -9,7 +9,7 @@
 
 import {
   blobs, SINCE, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
-  sendEmail, caseLine, injuryText, reportPdf, fmtDate, tailKey,
+  sendEmail, unsubUrl, CAP_DAY_ALL, CAP_DAY_PROFILE, caseLine, injuryText, reportPdf, fmtDate, tailKey,
 } from './common.mjs';
 
 const US = s => !s || /^(US|USA|UNITED STATES)$/i.test(s);
@@ -116,10 +116,19 @@ export async function runPoll(context, { silent = false } = {}) {
 
   // 4. pings
   let sent = 0;
+  const dayKey = started.slice(0, 10);
+  const sends = (await B.get('sends')) || {};
+  if (sends.day !== dayKey) { sends.day = dayKey; sends.n = 0; }
   const send = async (p, msg) => {
-    p.log = [{ at: started, text: msg.title + ' — ' + msg.body.split('\n')[0] }, ...(p.log || [])].slice(0, 60);
-    if (silent || !(p.email && p.emailOn)) return;
-    try { const r = await sendEmail(p.email, msg); if (r.ok) sent++; } catch (e) { /* keep going */ }
+    const line = msg.title + ' — ' + msg.body.split('\n')[0];
+    // only confirmed addresses (profiles from before v0.11 have no emailVerified field and count as confirmed)
+    if (silent || !(p.email && p.emailOn) || p.emailVerified === false) { p.log = [{ at: started, text: line }, ...(p.log || [])].slice(0, 60); return; }
+    if (p.sentDay !== dayKey) { p.sentDay = dayKey; p.sentN = 0; }
+    if (p.sentN >= CAP_DAY_PROFILE || sends.n >= CAP_DAY_ALL) {
+      p.log = [{ at: started, text: 'Not emailed (daily limit reached): ' + line }, ...(p.log || [])].slice(0, 60); return;
+    }
+    p.log = [{ at: started, text: line }, ...(p.log || [])].slice(0, 60);
+    try { const r = await sendEmail(p.email, { ...msg, unsub: unsubUrl(p) }); if (r.ok) { sent++; p.sentN++; sends.n++; } } catch (e) { /* keep going */ }
   };
 
   for (const p of profiles) {
@@ -169,6 +178,7 @@ export async function runPoll(context, { silent = false } = {}) {
     if (dirty) await B.set('user/' + p.code, p);
   }
 
+  if (sent) await B.set('sends', sends);
   state.cases = now;
   state.asOf = started;
   await B.set('cases', state);

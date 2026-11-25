@@ -226,12 +226,20 @@ export function isPiston(c) {
 // the sender once a domain is verified, e.g. "Tracking Piston GA Accidents <alerts@wamware.com>".
 // ntfy was dropped 25-Nov-2026: its iPhone app showed pings only inside the app.
 export const emailReady = () => !!env('RESEND_API_KEY');
-export async function sendEmail(to, { title, body, click = '' }) {
+// Sending caps (v0.11): Resend's free plan allows 100 emails a day, so stay under it with room for confirm emails.
+export const CAP_DAY_ALL = 90, CAP_DAY_PROFILE = 12;
+export const apiUrl = q => APP_URL + '.netlify/functions/api?' + new URLSearchParams(q).toString();
+export const unsubUrl = p => p.etoken ? apiUrl({ op: 'unsub', code: p.code, t: p.etoken }) : '';
+export const page = (title, msg) => new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
+<style>body{margin:0;padding:40px 16px;background:#10141a;color:#e7e4dc;font:15px/1.5 -apple-system,system-ui,sans-serif}main{max-width:520px;margin:0 auto}h1{font-size:19px}a{color:#f5a623}</style></head>
+<body><main><h1>${title}</h1><p>${msg}</p><p><a href="${APP_URL}">Open Tracking Piston GA Accidents</a></p></main></body></html>`, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+export async function sendEmail(to, { title, body, click = '', unsub = '' }) {
   const key = env('RESEND_API_KEY');
   if (!key) return { ok: false, status: 0, why: 'Email sending is not set up on the server yet (RESEND_API_KEY).' };
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(to || '')) return { ok: false, status: 0, why: 'No valid email address in the profile.' };
   const text = String(body || '') + (click ? `\n\nOpen in the app: ${click}` : '') +
-    `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change or stop these emails in section 3 of ${APP_URL}`;
+    `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change these emails in section 3 of ${APP_URL}` +
+    (unsub ? `\nStop all emails with one click: ${unsub}` : '');
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },

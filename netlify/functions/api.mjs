@@ -7,13 +7,16 @@
 //   POST ?op=test&code=…              send a test ping
 //   GET  ?op=tail&q=N12345            NTSB cases for one N-number (for adding a watch)
 //   GET  ?op=case&n=WPR27FA039        one NTSB case (watch list status)
+//   POST ?op=confirm-again&code=…   send the confirm-your-email link again
+//   GET  ?op=confirm&code=…&t=…      the link in that email: confirms the address (HTML page)
+//   GET  ?op=unsub&code=…&t=…        one-click stop from any ping email (HTML page)
 //   POST ?op=refresh                  run the check now (at most once every 10 minutes)
 //
 // An alert profile is keyed by a 12-character code, like Day's Flight Schedule's sync code: anyone
 // with the code can see and change that profile. Good enough for one user now; a public version
 // would add a sign-in (see README).
 
-import { blobs, json, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, SINCE } from '../lib/common.mjs';
+import { blobs, json, page, apiUrl, unsubUrl, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, SINCE } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
 
 const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -23,6 +26,7 @@ const newCode = () => `${rnd(4)}-${rnd(4)}-${rnd(4)}`;
 
 const pub = p => ({
   code: p.code, email: p.email || '', emailOn: !!p.emailOn, emailReady: emailReady(),
+  emailVerified: p.emailVerified !== false, confirmSentAt: p.confirmSentAt || null,
   rules: p.rules, log: (p.log || []).slice(0, 30),
   watches: (p.watches || []).map(w => ({ kind: w.kind, id: w.id, tail: w.tail, label: w.label || '', added: w.added, checked: w.checked || null, latest: w.latest || null })),
 });
@@ -50,6 +54,15 @@ function mergeWatches(oldW, inW) {
     return prev ? { ...prev, label: String(w.label || prev.label || '').slice(0, 80) }
       : { kind, id, tail, label: String(w.label || '').slice(0, 80), added: new Date().toISOString() };
   }).filter(Boolean);
+}
+
+async function sendConfirmEmail(p) {
+  p.etoken = rnd(24, 'abcdefghijkmnpqrstuvwxyz23456789');
+  p.confirmSentAt = new Date().toISOString();
+  return sendEmail(p.email, {
+    title: 'Confirm your email for Tracking Piston GA Accidents',
+    body: `Someone (hopefully you) asked for accident pings from Tracking Piston GA Accidents to go to this address.\n\nConfirm with this link:\n${apiUrl({ op: 'confirm', code: p.code, t: p.etoken })}\n\nIf it wasn't you, ignore this email and nothing more will be sent.`,
+  });
 }
 
 export default async (req, context) => {
@@ -100,6 +113,17 @@ export default async (req, context) => {
       return json(200, pub(p));
     }
 
+    // links from emails (GET, answered with a small page)
+    if (op === 'confirm' || op === 'unsub') {
+      const c = String(url.searchParams.get('code') || '').toUpperCase(), t = String(url.searchParams.get('t') || '');
+      const q = CODE_RE.test(c) ? await B.get('user/' + c) : null;
+      if (!q || !q.etoken || t !== q.etoken) return page('Link not valid', 'This link has expired or was replaced by a newer one. Open the app and use section 3.');
+      if (op === 'confirm') { q.emailVerified = true; q.emailOn = true; await B.set('user/' + c, q);
+        return page('Email confirmed', `Pings for this alert profile will go to ${q.email.replace(/</g, '')}.`); }
+      q.emailOn = false; await B.set('user/' + c, q);
+      return page('Emails stopped', 'This alert profile will not send any more emails. You can turn them back on in section 3 of the app.');
+    }
+
     const code = String(url.searchParams.get('code') || '').toUpperCase();
     if (!CODE_RE.test(code)) return json(400, { error: 'Bad profile code' });
     const p = await B.get('user/' + code);
@@ -111,17 +135,33 @@ export default async (req, context) => {
       const body = await req.json().catch(() => ({}));
       if ('rules' in body) p.rules = cleanRules(body.rules);
       if ('emailOn' in body) p.emailOn = !!body.emailOn;
-      if ('email' in body) p.email = /^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(body.email || '') ? String(body.email) : '';
+      let sendConfirm = false;
+      if ('email' in body) {
+        const e = /^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(String(body.email || '').trim()) ? String(body.email).trim() : '';
+        // v0.11: a new address must be confirmed by clicking a link before any ping goes to it
+        if (e.toLowerCase() !== String(p.email || '').toLowerCase()) { p.email = e; p.emailVerified = false; p.etoken = ''; sendConfirm = !!e; }
+      }
       if ('watches' in body) p.watches = mergeWatches(p.watches, body.watches);
+      let confirm = null;
+      if (sendConfirm) confirm = await sendConfirmEmail(p);
       await B.set('user/' + code, p);
-      return json(200, pub(p));
+      return json(200, { ...pub(p), confirm });
+    }
+
+    if (op === 'confirm-again' && req.method === 'POST') {
+      if (!p.email) return json(400, { error: 'No email address saved' });
+      if (p.confirmSentAt && Date.now() - Date.parse(p.confirmSentAt) < 60e3) return json(429, { error: 'Sent less than a minute ago' });
+      const r = await sendConfirmEmail(p);
+      await B.set('user/' + code, p);
+      return json(r.ok ? 200 : 502, { ...pub(p), confirm: r });
     }
 
     if (op === 'test' && req.method === 'POST') {
+      if (p.emailVerified === false) return json(409, { ok: false, why: 'Confirm your address first: click the link in the email sent to ' + p.email + '.' });
       const r = await sendEmail(p.email, {
         title: 'Test ping from Tracking Piston GA Accidents',
         body: 'If you can read this, pings for this alert profile reach you by email.',
-        click: APP_URL,
+        click: APP_URL, unsub: unsubUrl(p),
       });
       return json(r.ok ? 200 : 502, r);
     }

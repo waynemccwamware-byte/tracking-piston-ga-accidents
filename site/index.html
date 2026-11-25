@@ -363,7 +363,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.10</span>
+    <span class="ver mono">v0.11</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -451,6 +451,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
             <h3>Send pings to</h3>
             <label class="ck"><input type="checkbox" id="pEmail"> <span><b>Email</b></span></label>
             <input type="email" id="emailIn" placeholder="you@example.com" style="width:100%">
+            <p class="note" id="emailStatus"></p>
             <p class="note" id="emailNote"></p>
             <p class="note">Text messages and phone push are being looked at.</p>
           </div>
@@ -685,10 +686,18 @@ function showProfile() {
   drawWatches();
   if (!P) return;
   $('codeOut').textContent = P.code;
-  $('emailNote').textContent = P.emailReady ? 'Pings arrive as plain emails from the app. Tick Email, enter your address, Save, then send a test.' : 'Email sending is still being set up on the server: your address is saved, and pings start once it is ready.';
+  $('emailNote').textContent = P.emailReady ? 'Pings arrive as plain emails. Tick Email, enter your address and Save; we email you a link to confirm it, and every ping has a one-click stop link.' : 'Email sending is still being set up on the server: your address is saved, and pings start once it is ready.';
   $('rFatal').checked = P.rules.fatal !== false; $('rNew').checked = !!P.rules.newOn;
   [...$('rSev').querySelectorAll('input')].forEach(i => { i.checked = P.rules.sev.includes(i.value); });
   $('pEmail').checked = !!P.emailOn; $('emailIn').value = P.email || '';
+  $('emailStatus').innerHTML = !P.email ? ''
+    : P.emailVerified ? `<span style="color:var(--teal)">✓ ${esc(P.email)} is confirmed.</span>`
+    : `<span style="color:var(--amber)">Waiting for you to confirm ${esc(P.email)}: click the link in the email we sent${P.confirmSentAt ? ' ' + dmyT(P.confirmSentAt) : ''}. No pings go out until then.</span> <button class="btn sm" type="button" id="confirmAgain">Send the link again</button>`;
+  if ($('confirmAgain')) $('confirmAgain').onclick = async () => {
+    const r = await fetch(API + '?op=confirm-again&code=' + encodeURIComponent(P.code), { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) { P = d; showProfile(); flash('Confirm link sent to ' + P.email + '.'); } else flash('Not sent: ' + ((d.confirm && d.confirm.why) || d.error || 'HTTP ' + r.status), true);
+  };
   drawChips();
   $('log').innerHTML = (P.log || []).map(l => `<li>${dmyT(l.at)} · ${esc(l.text)}</li>`).join('') || '<li>None yet.</li>';
   render();
@@ -821,7 +830,9 @@ async function saveProfile(part, quiet) {
     const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.status);
-    P = d; showProfile(); if (!quiet) flash('Saved.');
+    P = d; showProfile();
+    if (d.confirm) flash(d.confirm.ok ? `Saved. We emailed a confirm link to ${P.email}; pings start once you click it.` : 'Saved, but the confirm email was not sent: ' + (d.confirm.why || 'HTTP ' + d.confirm.status), !d.confirm.ok);
+    else if (!quiet) flash('Saved.');
   } catch (e) { flash('Couldn\'t save: ' + e.message, true); }
 }
 $('mkProfile').onclick = async () => {

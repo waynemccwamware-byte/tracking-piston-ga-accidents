@@ -41,6 +41,15 @@ rules, email, watches with what was last seen, recent pings).
 4. Each watched N-number is asked for by tail (`GetAviationCasesFiltered?aircraftRegistrationNumber=`,
    checked 22-Nov-2026); each watched case by number (Aviation/v1/GetAviationCase?ntsbNumber=, checked 25-Nov-2026). A change in status, report type, factual report, docket, report date, probable cause, closure or injury counts pings.
 
+## Email pings (v0.11)
+
+- A new address gets a confirm-your-email link; nothing else is sent to it until the link is clicked
+  (profiles saved before v0.11 count as confirmed).
+- Every ping and test email ends with a one-click stop link (`?op=unsub`).
+- Caps: 12 emails per profile per day and 90 in all per day (Resend free plan: 100 a day); pings over
+  a cap are logged in the profile as "Not emailed (daily limit reached)".
+- Until a domain is verified in Resend, emails go only to the Resend account's own address.
+
 ## Open items
 
 - FAA preliminary notices (next-day, 10 business days kept): no stable machine-readable URL found yet
