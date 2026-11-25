@@ -5,11 +5,11 @@
 //   cases       {asOf, cases:{<ntsb>: slim case + fp}}   every piston fixed-wing US case since SINCE
 //   status      {lastRun, ok, error, counts, note}
 //   users       [codes]                                    index of alert profiles
-//   user/<code> {code, topic, email, rules, watches, log}  one alert profile (see api.mjs)
+//   user/<code> {code, email, emailOn, rules, watches, log}  one alert profile (see api.mjs)
 
 import {
   blobs, SINCE, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
-  ntfy, caseLine, injuryText, reportPdf, fmtDate, tailKey,
+  sendEmail, caseLine, injuryText, reportPdf, fmtDate, tailKey,
 } from './common.mjs';
 
 const US = s => !s || /^(US|USA|UNITED STATES)$/i.test(s);
@@ -118,10 +118,8 @@ export async function runPoll(context, { silent = false } = {}) {
   let sent = 0;
   const send = async (p, msg) => {
     p.log = [{ at: started, text: msg.title + ' — ' + msg.body.split('\n')[0] }, ...(p.log || [])].slice(0, 60);
-    if (silent || !p.topic) return;
-    const wantPush = p.push !== false, wantEmail = !!(p.email && p.emailOn);
-    if (!wantPush && !wantEmail) return;
-    try { await ntfy(p.topic, { ...msg, email: wantEmail ? p.email : '' }); sent++; } catch (e) { /* keep going */ }
+    if (silent || !(p.email && p.emailOn)) return;
+    try { const r = await sendEmail(p.email, msg); if (r.ok) sent++; } catch (e) { /* keep going */ }
   };
 
   for (const p of profiles) {

@@ -192,7 +192,6 @@ label.ck input{ margin-top:2px; accent-color:var(--amber); }
 .chip button{ all:unset; cursor:pointer; color:var(--text-muted); }
 .chip button:hover{ color:var(--amber); }
 .code{ font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--amber); letter-spacing:.04em; }
-.topic{ font-family:'IBM Plex Mono',monospace; font-size:12px; word-break:break-all; color:var(--text-primary); background:#0d1117; border:1px solid var(--bezel-hi); border-radius:5px; padding:4px 7px; display:inline-block; }
 ol.steps{ margin:6px 0 0 18px; padding:0; font-size:12.5px; line-height:1.55; color:var(--text-primary); }
 ol.steps a, .note a, .fine a{ color:var(--teal); }
 .log{ font-size:11.5px; color:var(--text-muted); margin:6px 0 0; padding:0; list-style:none; max-height:180px; overflow:auto; }
@@ -364,7 +363,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.8</span>
+    <span class="ver mono">v0.9</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -450,15 +449,10 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
           </div>
           <div class="box">
             <h3>Send pings to</h3>
-            <label class="ck"><input type="checkbox" id="pPush" checked> <span><b>iPhone / Android / desktop push</b>, through the free ntfy app</span></label>
-            <ol class="steps">
-              <li>Install ntfy (<a href="https://apps.apple.com/us/app/ntfy/id1625396347" target="_blank" rel="noopener">App Store</a>; Android and web: <a href="https://docs.ntfy.sh/subscribe/phone/" target="_blank" rel="noopener">ntfy docs</a>).</li>
-              <li>Tap <b>+</b> and subscribe to this topic:<br><span class="topic" id="topicOut"></span> <button class="btn sm" id="copyTopic" type="button">Copy</button></li>
-              <li>Send a test ping below.</li>
-            </ol>
-            <label class="ck" style="margin-top:10px"><input type="checkbox" id="pEmail"> <span><b>Email</b></span></label>
+            <label class="ck"><input type="checkbox" id="pEmail"> <span><b>Email</b></span></label>
             <input type="email" id="emailIn" placeholder="you@example.com" style="width:100%">
-            <p class="note" id="emailNote">Email goes out through ntfy too, which allows 5 emails a day per account. Until the app's ntfy account is set up, email is saved but not sent.</p>
+            <p class="note" id="emailNote"></p>
+            <p class="note">Text messages and phone push are being looked at.</p>
           </div>
         </div>
         <div class="ctls" style="margin-top:10px">
@@ -476,7 +470,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <p class="note"><b>Timing.</b> NTSB usually lists a case several days after the accident. For example, an SR22T accident on 21-Nov-2026 (N462DL, listed elsewhere) wasn't in NTSB's data yet on 25-Nov-2026. Faster sources (the FAA's next-day notices) are on the to-do list.</p>
       <p class="note"><b>What a ping means.</b> A new-accident ping comes when NTSB first lists the case, usually a few days after the event. NTSB's first details are preliminary and can change. Watching needs no profile; a watch ping (with a profile) comes when a watched case's status, report date, probable cause, injury counts or closure changes, or when a watched N-number gets a new case.</p>
       <p class="note"><b>Not yet included.</b> The FAA's next-day preliminary notices (faster than NTSB, but only kept for 10 business days) and Mexico and Canada.</p>
-      <p class="note"><b>Privacy.</b> Your profile holds your settings, watch list, optional email address and a random ntfy topic name. Anyone who has the profile code or topic name can see that profile's pings, so keep them to yourself.</p>
+      <p class="note"><b>Privacy.</b> Your profile holds your settings, watch list, and optional email address. Anyone who has the profile code can see and change that profile, so keep it to yourself.</p>
     </section>
   </div>
 
@@ -690,10 +684,11 @@ function showProfile() {
   $('noProfile').hidden = !!P; $('hasProfile').hidden = !P;
   drawWatches();
   if (!P) return;
-  $('codeOut').textContent = P.code; $('topicOut').textContent = P.topic;
+  $('codeOut').textContent = P.code;
+  $('emailNote').textContent = P.emailReady ? 'Pings arrive as plain emails from the app. Tick Email, enter your address, Save, then send a test.' : 'Email sending is still being set up on the server: your address is saved, and pings start once it is ready.';
   $('rFatal').checked = P.rules.fatal !== false; $('rNew').checked = !!P.rules.newOn;
   [...$('rSev').querySelectorAll('input')].forEach(i => { i.checked = P.rules.sev.includes(i.value); });
-  $('pPush').checked = P.push !== false; $('pEmail').checked = !!P.emailOn; $('emailIn').value = P.email || '';
+  $('pEmail').checked = !!P.emailOn; $('emailIn').value = P.email || '';
   drawChips();
   $('log').innerHTML = (P.log || []).map(l => `<li>${dmyT(l.at)} · ${esc(l.text)}</li>`).join('') || '<li>None yet.</li>';
   render();
@@ -820,7 +815,7 @@ async function saveProfile(part, quiet) {
   const body = part || {
     rules: { ...P.rules, fatal: $('rFatal').checked, newOn: $('rNew').checked,
              sev: [...$('rSev').querySelectorAll('input:checked')].map(i => i.value) },
-    push: $('pPush').checked, emailOn: $('pEmail').checked, email: $('emailIn').value.trim(),
+    emailOn: $('pEmail').checked, email: $('emailIn').value.trim(),
   };
   try {
     const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -831,7 +826,7 @@ async function saveProfile(part, quiet) {
 }
 $('mkProfile').onclick = async () => {
   $('mkProfile').disabled = true;
-  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile(); flash('Alert profile made. Subscribe to the topic in ntfy, then send a test ping.'); }
+  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile(); flash('Alert profile made. Add your email in section 3, Save, then send a test.'); }
   catch (e) { P = null; alert('Couldn\'t make a profile: ' + e.message); }
   $('mkProfile').disabled = false;
 };
@@ -842,11 +837,11 @@ $('forget').onclick = e => { e.preventDefault(); P = null; LS.set('tpga-code', n
 $('save').onclick = () => saveProfile();
 $('test').onclick = async () => {
   $('test').disabled = true;
-  try { const r = await fetch(API + '?op=test&code=' + encodeURIComponent(P.code), { method: 'POST' }); flash(r.ok ? 'Test ping sent. It should arrive within a minute.' : 'The ping service didn\'t accept it (HTTP ' + r.status + ').', !r.ok); }
+  try { const r = await fetch(API + '?op=test&code=' + encodeURIComponent(P.code), { method: 'POST' }); { const d = await r.json().catch(() => ({})); flash(r.ok ? 'Test email sent. It should arrive within a minute.' : 'Not sent: ' + (d.why || 'HTTP ' + r.status), !r.ok); } }
   catch (e) { flash('Test failed: ' + e.message, true); }
   $('test').disabled = false;
 };
-$('copyTopic').onclick = async () => { try { await navigator.clipboard.writeText(P.topic); flash('Topic copied.'); } catch (e) { flash('Copy failed; select the topic and copy it.', true); } };
+
 
 const saved = LS.get('tpga-code');
 if (saved) loadProfile(saved).catch(() => { LS.set('tpga-code', null); showProfile(); }); else showProfile();

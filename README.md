@@ -14,20 +14,22 @@ Sister app: GA Accident Stats (https://piston-ga-stats.netlify.app/), linked bot
 | `site/index.html` | the page (App Conventions skeleton; footer blocks written by the Control Panel's `tools/ggp-footer`) |
 | `netlify/functions/poll.mjs` | scheduled hourly at :23 UTC: runs the check (`netlify/lib/poll-core.mjs`) |
 | `netlify/functions/api.mjs` | page calls: feed, alert profiles, watch lookups, test ping, on-demand check |
-| `netlify/lib/common.mjs` | Blobs client, NTSB API calls, case shaping, piston test and type families, ntfy |
+| `netlify/lib/common.mjs` | Blobs client, NTSB API calls, case shaping, piston test and type families, email sending (Resend) |
 
 No npm packages and no build step (App Conventions §1).
 
 ## Settings on the Netlify site
 
 - `NTSB_API_KEY` (secret, Functions scope): Wayne's developer.ntsb.gov key, same as on piston-ga-stats.
-- `NTFY_TOKEN` (optional, secret): access token of an ntfy.sh account with a verified email address.
-  Needed only for email pings; ntfy.sh sends email only for signed-in accounts, 5 a day on the free plan.
+- `RESEND_API_KEY` (secret): Resend API key for email pings (free plan 3,000 a month, 100 a day).
+- `PING_FROM` (optional): sender once a domain is verified in Resend; until then the sender is
+  onboarding@resend.dev, which Resend delivers only to the Resend account's own address.
+  (ntfy push was dropped 25-Nov-2026: its iPhone app showed pings only inside the app.)
 
 ## Storage (Netlify Blobs, store `tracking-piston-ga-accidents`)
 
 `cases` (the list), `status` (last check), `users` (profile codes), `user/<code>` (one alert profile:
-rules, push/email, watches with what was last seen, recent pings).
+rules, email, watches with what was last seen, recent pings).
 
 ## How the check works
 

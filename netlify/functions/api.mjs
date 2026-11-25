@@ -1,9 +1,9 @@
 // Tracking Piston GA Accidents: the page's server calls.
 //
 //   GET  ?op=feed                     accident list since 01-Oct-2026 + last check status
-//   POST ?op=profile-new              new alert profile -> {code, topic, ...}
+//   POST ?op=profile-new              new alert profile -> {code, ...}
 //   GET  ?op=profile&code=XXXX-XXXX-XXXX
-//   POST ?op=profile&code=…           save rules / push / email / watches (server keeps each watch's history)
+//   POST ?op=profile&code=…           save rules / email / watches (server keeps each watch's history)
 //   POST ?op=test&code=…              send a test ping
 //   GET  ?op=tail&q=N12345            NTSB cases for one N-number (for adding a watch)
 //   GET  ?op=case&n=WPR27FA039        one NTSB case (watch list status)
@@ -13,18 +13,16 @@
 // with the code can see and change that profile. Good enough for one user now; a public version
 // would add a sign-in (see README).
 
-import { blobs, json, casesForTail, caseByNumber, slimCase, tailKey, ntfy, APP_URL, SINCE } from '../lib/common.mjs';
+import { blobs, json, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, SINCE } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
 
 const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
 const rnd = (n, a = ALPH) => { const b = new Uint8Array(n); crypto.getRandomValues(b); return [...b].map(x => a[x % a.length]).join(''); };
 const newCode = () => `${rnd(4)}-${rnd(4)}-${rnd(4)}`;
-// ntfy topics are public to anyone who knows the name, so the name is long and random.
-const newTopic = () => 'tpga-' + rnd(20, 'abcdefghijkmnpqrstuvwxyz23456789');
 
 const pub = p => ({
-  code: p.code, topic: p.topic, push: p.push !== false, email: p.email || '', emailOn: !!p.emailOn,
+  code: p.code, email: p.email || '', emailOn: !!p.emailOn, emailReady: emailReady(),
   rules: p.rules, log: (p.log || []).slice(0, 30),
   watches: (p.watches || []).map(w => ({ kind: w.kind, id: w.id, tail: w.tail, label: w.label || '', added: w.added, checked: w.checked || null, latest: w.latest || null })),
 });
@@ -93,7 +91,7 @@ export default async (req, context) => {
     }
 
     if (op === 'profile-new' && req.method === 'POST') {
-      const p = { code: newCode(), topic: newTopic(), push: true, email: '', emailOn: false,
+      const p = { code: newCode(), email: '', emailOn: false,
         rules: cleanRules({ fatal: true, newOn: false, sev: ['Fatal', 'Serious'] }), watches: [], log: [], created: new Date().toISOString() };
       await B.set('user/' + p.code, p);
       const users = (await B.get('users')) || [];
@@ -112,7 +110,6 @@ export default async (req, context) => {
     if (op === 'profile' && req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       if ('rules' in body) p.rules = cleanRules(body.rules);
-      if ('push' in body) p.push = !!body.push;
       if ('emailOn' in body) p.emailOn = !!body.emailOn;
       if ('email' in body) p.email = /^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(body.email || '') ? String(body.email) : '';
       if ('watches' in body) p.watches = mergeWatches(p.watches, body.watches);
@@ -121,11 +118,10 @@ export default async (req, context) => {
     }
 
     if (op === 'test' && req.method === 'POST') {
-      const r = await ntfy(p.topic, {
+      const r = await sendEmail(p.email, {
         title: 'Test ping from Tracking Piston GA Accidents',
-        body: 'If you can read this, pings for this alert profile reach you.',
-        priority: 3, tags: 'white_check_mark', click: APP_URL,
-        email: p.emailOn ? p.email : '',
+        body: 'If you can read this, pings for this alert profile reach you by email.',
+        click: APP_URL,
       });
       return json(r.ok ? 200 : 502, r);
     }

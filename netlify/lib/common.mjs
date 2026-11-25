@@ -6,7 +6,7 @@
 //   NTSB      — NTSB Public API (key: Netlify secret env var NTSB_API_KEY, header Ocp-Apim-Subscription-Key)
 //   slimCase  — one NTSB case reduced to what the app shows and watches
 //   piston    — piston fixed-wing test + type family names (ported from GA Accident Stats build/families.py)
-//   ntfy      — push notifications through ntfy.sh (docs.ntfy.sh/publish, read 25-Nov-2026)
+//   sendEmail — email pings through Resend (see below)
 
 export const STORE = 'tracking-piston-ga-accidents';
 export const SINCE = '2026-10-01';          // first accident date gathered (Wayne, 25-Nov-2026)
@@ -218,22 +218,29 @@ export function isPiston(c) {
   return true;
 }
 
-// ---------------------------------------------------------------- ntfy
-// POST https://ntfy.sh/<topic>; headers Title, Priority (1-5), Tags, Click (docs.ntfy.sh/publish, 25-Nov-2026).
-// Email: ntfy.sh only forwards email for a signed-in account with a verified address (anonymous email
-// was disabled), 5 a day on the free plan. Set NTFY_TOKEN (an access token from that account) to enable it.
-export async function ntfy(topic, { title, body, priority = 3, tags = '', click = '', email = '' }) {
-  if (!/^[A-Za-z0-9_-]{12,64}$/.test(topic || '')) return { ok: false, why: 'bad topic' };
-  const h = { Title: asciiHeader(title), Priority: String(priority) };
-  if (tags) h.Tags = tags;
-  if (click) h.Click = click;
-  const tok = env('NTFY_TOKEN');
-  if (email && tok) { h.Email = email; h.Authorization = `Bearer ${tok}`; }
-  const r = await fetch('https://ntfy.sh/' + topic, { method: 'POST', headers: h, body: String(body || '').slice(0, 3800) });
-  return { ok: r.ok, status: r.status };
+// ---------------------------------------------------------------- email (Resend)
+// POST https://api.resend.com/emails, Authorization: Bearer <RESEND_API_KEY>, JSON {from, to, subject, text}
+// (resend.com/docs/api-reference/emails/send-email, read 25-Nov-2026). Free plan: 3,000 a month, 100 a day.
+// Until a domain is verified in Resend, the sender must be onboarding@resend.dev and Resend delivers only to
+// the Resend account's own address (resend.com/docs/knowledge-base/403-error-resend-dev-domain). PING_FROM sets
+// the sender once a domain is verified, e.g. "Tracking Piston GA Accidents <alerts@wamware.com>".
+// ntfy was dropped 25-Nov-2026: its iPhone app showed pings only inside the app.
+export const emailReady = () => !!env('RESEND_API_KEY');
+export async function sendEmail(to, { title, body, click = '' }) {
+  const key = env('RESEND_API_KEY');
+  if (!key) return { ok: false, status: 0, why: 'Email sending is not set up on the server yet (RESEND_API_KEY).' };
+  if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(to || '')) return { ok: false, status: 0, why: 'No valid email address in the profile.' };
+  const text = String(body || '') + (click ? `\n\nOpen in the app: ${click}` : '') +
+    `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change or stop these emails in section 3 of ${APP_URL}`;
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env('PING_FROM') || 'Tracking Piston GA Accidents <onboarding@resend.dev>', to: [to], subject: String(title || '').slice(0, 200), text }),
+  });
+  let why = '';
+  if (!r.ok) { try { why = (await r.json()).message || ''; } catch (e) { /* ignore */ } }
+  return { ok: r.ok, status: r.status, why };
 }
-// HTTP headers must be plain ASCII; keep titles readable.
-const asciiHeader = s => String(s || '').replace(/→/g, '->').normalize('NFKD').replace(/[^\x20-\x7E]/g, '').slice(0, 250);
 
 export const fmtDate = iso => {
   const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
