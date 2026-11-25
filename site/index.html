@@ -354,7 +354,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.5</span>
+    <span class="ver mono">v0.6</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
@@ -363,7 +363,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 
     <section class="step" id="secList">
       <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub">event dates from 01-Oct-2026 to today</span></h2>
-      <p class="note" style="margin-top:-2px">A fixed start date, not a rolling window or a quarter: the list keeps growing from 01-Oct-2026. Newest accident first. NTSB usually lists a case several days after it happens.</p>
+      <p class="note" style="margin-top:-2px">A fixed start date, not a rolling window or a quarter: the list keeps growing from 01-Oct-2026. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens.</p>
       <p class="status" id="status">Loading…</p>
       <div class="ctls">
         <div class="seg" id="sevSeg" role="group" aria-label="Severity">
@@ -374,10 +374,6 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
         <button type="button" class="pick-btn" id="famBtn" aria-expanded="false"><span class="pv" id="famSum">All types</span><span class="caret">▾</span></button>
         <select id="stSel" aria-label="State"><option value="">All states</option></select>
         <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
-        <div class="seg" id="viewSeg" role="group" aria-label="Rows">
-          <button type="button" data-v="short" aria-pressed="false">All closed</button>
-          <button type="button" data-v="full" aria-pressed="true">All open</button>
-        </div>
       </div>
       <div id="famPanel" hidden></div>
       <div class="list" id="list"></div>
@@ -501,9 +497,10 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 // Filters and the Short/Full choice are remembered on this device (v0.2); the search box is not.
 const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters') || '{}'); } catch (e) { return {}; } })();
 const st = { cases: [], sev: saved0.sev || 'all', fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
-  view: saved0.view === 'short' ? 'short' : 'full', q: '', shown: 40, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
+  view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
+  q: '', shown: 40, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
 const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
-const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state, view: st.view }));
+const keepFilters = () => LS.set('tpga-filters', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state }));
 const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
 
@@ -579,13 +576,9 @@ $('sevSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   st.sev = b.dataset.v; st.shown = 40; keepFilters(); syncSegs(); render();
 });
-$('viewSeg').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  st.view = b.dataset.v; st.open.clear(); keepFilters(); syncSegs(); render();
-});
+
 function syncSegs() {
   [...$('sevSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.sev));
-  [...$('viewSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.view));
 }
 function famSummary() {
   $('famSum').textContent = !st.fams.length ? 'All types' : st.fams.length === 1 ? st.fams[0] : `${st.fams.length} types`;
