@@ -363,7 +363,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.9</span>
+    <span class="ver mono">v0.10</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -837,7 +837,8 @@ $('forget').onclick = e => { e.preventDefault(); P = null; LS.set('tpga-code', n
 $('save').onclick = () => saveProfile();
 $('test').onclick = async () => {
   $('test').disabled = true;
-  try { const r = await fetch(API + '?op=test&code=' + encodeURIComponent(P.code), { method: 'POST' }); { const d = await r.json().catch(() => ({})); flash(r.ok ? 'Test email sent. It should arrive within a minute.' : 'Not sent: ' + (d.why || 'HTTP ' + r.status), !r.ok); } }
+  await saveProfile(null, true);   // v0.10: save what's on screen first, so the test goes to the address shown
+  try { const r = await fetch(API + '?op=test&code=' + encodeURIComponent(P.code), { method: 'POST' }); { const d = await r.json().catch(() => ({})); flash(r.ok ? 'Test email sent to ' + (P.email || '') + '. It should arrive within a minute.' : 'Not sent: ' + (d.why || 'HTTP ' + r.status), !r.ok); } }
   catch (e) { flash('Test failed: ' + e.message, true); }
   $('test').disabled = false;
 };
