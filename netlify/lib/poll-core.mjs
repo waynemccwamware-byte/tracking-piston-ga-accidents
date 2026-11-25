@@ -83,6 +83,8 @@ export async function runPoll(context, { silent = false } = {}) {
   try { const raw = await casesModified(day(T, -2), T); take(raw, quiet); status.counts.modified = raw.length; }
   catch (e) { errs.push('modified: ' + e.message); }
   status.error = errs.join('; ');
+  // re-apply the piston test to stored cases, so a tightened rule also clears earlier entries
+  Object.keys(now).forEach(k => { if (!isPiston(now[k])) delete now[k]; });
   const seeding = backfilling;
 
   // 2. alert profiles
