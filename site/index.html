@@ -139,6 +139,9 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .w{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; border:1px solid var(--bezel); border-radius:6px; padding:8px 10px; background:#151b23; font-size:12.5px; }
 .w .id{ font-family:'IBM Plex Mono',monospace; color:var(--amber); font-weight:500; }
 .w .sm{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+.w.new{ border-color:var(--amber-dim); background:rgba(245,166,35,.06); }
+.badge{ display:inline-block; font:600 10.5px 'IBM Plex Sans',sans-serif; color:#10141a; background:var(--amber); border-radius:4px; padding:1px 5px; margin-left:6px; vertical-align:1px; }
+.w .acts{ display:flex; flex-direction:column; gap:5px; flex:none; }
 .lk{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
 .lk .row{ display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:12.5px; border-bottom:1px solid var(--bezel); padding:5px 0; }
 
@@ -325,7 +328,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.2</span>
+    <span class="ver mono">v0.3</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn sm" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type → GA Accident Stats</a></div>
@@ -357,9 +360,9 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
     </section>
 
     <section class="step" id="secWatch">
-      <h2><span class="num">2</span> Watch list <span class="sub">pings when a watched case or N-number changes</span></h2>
-      <div id="watchNeedProfile" class="note">Watches belong to an alert profile. Set one up in section 3 first; it takes one tap.</div>
-      <div id="watchArea" hidden>
+      <h2><span class="num">2</span> Watch list <span class="sub">cases and N-numbers you follow</span></h2>
+      <p class="note" id="watchMode"></p>
+      <div id="watchArea">
         <div class="ctls">
           <input type="text" class="mono" id="wTail" placeholder="N-number, e.g. N211WP" style="flex:1 1 160px" aria-label="N-number to look up">
           <button class="btn sm primary" id="wLook" type="button">Look up</button>
@@ -367,6 +370,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
         <p class="note">Watch a whole N-number (any new or changed NTSB case for that aircraft) or one case from its list. You can also tap <b>☆ Watch</b> on any accident in section 1.</p>
         <div class="lk" id="lookOut"></div>
         <div class="wl" id="wl"></div>
+        <div class="ctls" style="margin-top:6px"><button class="btn sm" id="wRefresh" type="button">Check NTSB now</button><span class="note" id="wAsOf" style="margin:0"></span></div>
       </div>
     </section>
 
@@ -429,7 +433,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <h2><span class="num">4</span> How this works</h2>
       <p class="note"><b>Source.</b> The NTSB Public API (developer.ntsb.gov), the same database behind NTSB CAROL. A server check runs every hour and keeps US piston fixed-wing cases with an event date from 01-Oct-2026 on. "Piston" means NTSB lists an airplane with a reciprocating engine. New NTSB records often have no engine or category yet; those count as piston unless the make or model is a known turbine, jet or helicopter (Boeing, Robinson, Caravan, King Air and the like), so the odd turbine can slip in until NTSB fills in the engine.</p>
       <p class="note"><b>Timing.</b> NTSB usually lists a case several days after the accident. For example, an SR22T accident on 21-Nov-2026 (N462DL, listed elsewhere) wasn't in NTSB's data yet on 25-Nov-2026. Faster sources (the FAA's next-day notices) are on the to-do list.</p>
-      <p class="note"><b>What a ping means.</b> A new-accident ping comes when NTSB first lists the case, usually a few days after the event. NTSB's first details are preliminary and can change. A watch ping comes when a watched case's status, report date, probable cause, injury counts or closure changes, or when a watched N-number gets a new case.</p>
+      <p class="note"><b>What a ping means.</b> A new-accident ping comes when NTSB first lists the case, usually a few days after the event. NTSB's first details are preliminary and can change. Watching needs no profile; a watch ping (with a profile) comes when a watched case's status, report date, probable cause, injury counts or closure changes, or when a watched N-number gets a new case.</p>
       <p class="note"><b>Not yet included.</b> The FAA's next-day preliminary notices (faster than NTSB, but only kept for 10 business days) and Mexico and Canada.</p>
       <p class="note"><b>Privacy.</b> Your profile holds your settings, watch list, optional email address and a random ntfy topic name. Anyone who has the profile code or topic name can see that profile's pings, so keep them to yourself.</p>
     </section>
@@ -512,7 +516,7 @@ function fillSelects() {
   $('rStAdd').innerHTML = '<option value="">+ state (any if none)</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 }
 
-const watching = c => !!(P && P.watches.some(w => (w.kind === 'case' && w.id === c.ntsb) || (w.kind === 'tail' && w.tail === c.reg)));
+const watching = c => WL.some(w => (w.kind === 'case' && w.id === c.ntsb) || (w.kind === 'tail' && w.tail === c.reg));
 
 function render() {
   const q = st.q.trim().toUpperCase();
@@ -578,11 +582,10 @@ $('list').addEventListener('click', async e => {
   if (cl) { if (st.view === 'short') st.open.delete(cl.dataset.close); else st.open.add('-' + cl.dataset.close); render(); return; }
   if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { if (st.view === 'short') st.open.add(o.dataset.open); else st.open.delete('-' + o.dataset.open); render(); return; } }
   const b = e.target.closest('.watch-btn'); if (!b) return;
-  if (!P) { $('secAlerts').scrollIntoView({ block: 'start', behavior: 'smooth' }); flash('Set up your alerts first, then tap Watch again.', true); return; }
   const id = b.dataset.case, tail = b.dataset.tail;
-  const i = P.watches.findIndex(w => w.kind === 'case' && w.id === id);
-  if (i >= 0) P.watches.splice(i, 1); else P.watches.push({ kind: 'case', id, tail });
-  await saveProfile({ watches: P.watches });
+  const i = WL.findIndex(w => w.kind === 'case' && w.id === id);
+  if (i >= 0) WL.splice(i, 1); else WL.push({ kind: 'case', id, tail, added: new Date().toISOString() });
+  watchesChanged();
 });
 
 // ------------------------------------------------------------ profile
@@ -596,13 +599,13 @@ function flash(t, bad) { const m = $('msg'); m.textContent = t; m.className = 'm
 
 function showProfile() {
   $('noProfile').hidden = !!P; $('hasProfile').hidden = !P;
-  $('watchNeedProfile').hidden = !!P; $('watchArea').hidden = !P;
+  drawWatches();
   if (!P) return;
   $('codeOut').textContent = P.code; $('topicOut').textContent = P.topic;
   $('rFatal').checked = P.rules.fatal !== false; $('rNew').checked = !!P.rules.newOn;
   [...$('rSev').querySelectorAll('input')].forEach(i => { i.checked = P.rules.sev.includes(i.value); });
   $('pPush').checked = P.push !== false; $('pEmail').checked = !!P.emailOn; $('emailIn').value = P.email || '';
-  drawChips(); drawWatches();
+  drawChips();
   $('log').innerHTML = (P.log || []).map(l => `<li>${dmyT(l.at)} · ${esc(l.text)}</li>`).join('') || '<li>None yet.</li>';
   render();
 }
@@ -620,23 +623,69 @@ $('rChips').addEventListener('click', e => {
 $('rFamAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.fams.includes(v)) P.rules.fams.push(v); e.target.value = ''; drawChips(); };
 $('rStAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.states.includes(v)) P.rules.states.push(v); e.target.value = ''; drawChips(); };
 
+// ------------------------------------------------------------ watch list
+// The list lives on this device (v0.3), so watching needs no profile: you follow it here, passively.
+// With an alert profile the same list is also kept on the server, which checks it hourly and pings you.
+// "New" means NTSB's record changed since you last tapped Seen on this device.
+let WL = (() => { try { const a = JSON.parse(LS.get('tpga-watches') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
+const LIVE = new Map();   // watch key -> {fp, cases:[...]} or {err}
+const wkey = w => w.kind + ':' + w.id;
+const cfp = c => [c.ntsb, c.status, c.profile, c.reportDate, c.factual, c.docket, c.pc ? 1 : 0, c.closed ? 1 : 0, c.fatal, c.serious, c.highest].join('|');
+const keepWL = () => LS.set('tpga-watches', JSON.stringify(WL));
+const forServer = () => WL.map(w => ({ kind: w.kind, id: w.id, tail: w.tail }));
+
+async function watchesChanged() {
+  keepWL(); drawWatches(); render();
+  WL.forEach(w => { if (!LIVE.has(wkey(w))) checkWatch(w); });
+  if (P) await saveProfile({ watches: forServer() }, true);
+}
+async function checkWatch(w) {
+  const k = wkey(w);
+  LIVE.set(k, { loading: true }); drawWatches();
+  try {
+    const r = await fetch(API + (w.kind === 'case' ? '?op=case&n=' : '?op=tail&q=') + encodeURIComponent(w.id));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    const cases = w.kind === 'case' ? [d.case] : (d.cases || []);
+    const fp = cases.map(cfp).sort().join('#');
+    LIVE.set(k, { fp, cases });
+    if (w.seenFp == null) { w.seenFp = fp; keepWL(); }   // first look: nothing is "new" yet
+  } catch (e) { LIVE.set(k, { err: e.message }); }
+  drawWatches(); $('wAsOf').textContent = 'Checked ' + dmyT(new Date().toISOString());
+}
 function drawWatches() {
-  $('wl').innerHTML = P.watches.map((w, i) => {
-    const l = w.latest;
-    const what = w.kind === 'tail' ? `Every case for <span class="id">${esc(w.tail)}</span>` : `Case <span class="id">${esc(w.id)}</span> · ${esc(w.tail)}`;
-    const sub = l ? `Latest: ${dmy(l.date)} ${esc(l.make || '')} ${esc(l.model || '')} · ${esc(l.highest || '')} · ${esc(l.status || '')}${l.reportDate ? ' · report ' + dmy(l.reportDate) : ''}`
-      : (w.kind === 'tail' ? 'No NTSB cases seen yet for this N-number.' : '');
-    const chk = w.checked ? `Checked ${dmyT(w.checked)}` : 'First check at the next hourly run';
-    const rep = l && l.status === 'Completed' && l.mkey ? ` · <a href="${pdf(l)}" target="_blank" rel="noopener" style="color:var(--teal)">report</a>` : '';
-    return `<div class="w"><div>${what}<div class="sm">${sub}${rep}</div><div class="sm">${chk}</div></div>
-      <button class="btn sm" type="button" data-i="${i}">Remove</button></div>`;
+  $('watchMode').innerHTML = P
+    ? 'Kept on this device and in your alert profile: you can check it here any time, and the server checks it every hour and <b>pings you when something changes</b>.'
+    : 'Watching is free and needs no setup: the list is kept on this device and shows what NTSB has now, marked <b>New</b> when it changed since you last looked. To be <b>pinged</b> when something changes, set up alerts in section 3.';
+  $('wl').innerHTML = WL.map((w, i) => {
+    const L = LIVE.get(wkey(w)) || {};
+    const isNew = L.fp != null && w.seenFp != null && L.fp !== w.seenFp;
+    const what = w.kind === 'tail' ? `Every NTSB case for <span class="id">${esc(w.tail)}</span>` : `Case <span class="id">${esc(w.id)}</span> · ${esc(w.tail || '')}`;
+    let sub;
+    if (L.loading) sub = 'Asking NTSB…';
+    else if (L.err) sub = `<span style="color:var(--alert)">NTSB lookup failed (${esc(L.err)})</span>`;
+    else if (L.cases) {
+      const c = L.cases.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+      sub = !c ? 'No NTSB cases for this N-number.'
+        : `${w.kind === 'tail' ? L.cases.length + ' case' + (L.cases.length === 1 ? '' : 's') + '; latest ' : ''}${dmy(c.date)} · ${esc(c.make)} ${esc(c.model)} · ${injText(c)}${c.city ? ' · ' + esc(c.city) + (c.st ? ', ' + esc(c.st) : '') : ''}<br>`
+          + `NTSB ${esc(c.ntsb)} · ${esc(c.status || '—')}${c.profile ? ' · ' + esc(c.profile) + ' report' : ''}${c.factual ? ' · factual ' + dmy(c.factual) : ''}${c.docket ? ' · docket ' + dmy(c.docket) : ''}${c.reportDate ? ' · report ' + dmy(c.reportDate) : ''}`
+          + (c.status === 'Completed' && c.mkey ? ` · <a href="${pdf(c)}" target="_blank" rel="noopener" style="color:var(--teal)">report PDF</a>` : '')
+          + (c.pc ? `<br><b style="color:var(--text-primary);font-weight:500">Probable cause:</b> ${esc(c.pc)}` : '');
+    } else sub = '';
+    const srv = P && P.watches ? P.watches.find(x => x.kind === w.kind && x.id === w.id) : null;
+    const pingLine = P ? `<div class="sm">${srv && srv.checked ? 'Pings on · server checked ' + dmyT(srv.checked) : 'Pings on · first server check at the next hourly run'}</div>` : '';
+    return `<div class="w${isNew ? ' new' : ''}"><div>${what}${isNew ? '<span class="badge">New</span>' : ''}<div class="sm">${sub}</div>${pingLine}</div>
+      <div class="acts">${isNew ? `<button class="btn sm primary" type="button" data-seen="${i}">Seen</button>` : ''}<button class="btn sm" type="button" data-i="${i}">Remove</button></div></div>`;
   }).join('') || '<div class="empty">Nothing watched yet.</div>';
 }
 $('wl').addEventListener('click', async e => {
+  const s1 = e.target.closest('button[data-seen]');
+  if (s1) { const w = WL[+s1.dataset.seen]; const L = LIVE.get(wkey(w)); if (L && L.fp != null) { w.seenFp = L.fp; keepWL(); drawWatches(); } return; }
   const b = e.target.closest('button[data-i]'); if (!b) return;
-  P.watches.splice(+b.dataset.i, 1);
-  await saveProfile({ watches: P.watches });
+  LIVE.delete(wkey(WL[+b.dataset.i])); WL.splice(+b.dataset.i, 1);
+  await watchesChanged();
 });
+$('wRefresh').onclick = () => WL.forEach(checkWatch);
 
 $('wLook').onclick = async () => {
   const t = tailKey($('wTail').value);
@@ -655,18 +704,30 @@ $('wLook').onclick = async () => {
 $('wTail').onkeydown = e => { if (e.key === 'Enter') $('wLook').click(); };
 $('lookOut').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.wtail) { if (!P.watches.some(w => w.kind === 'tail' && w.tail === b.dataset.wtail)) P.watches.push({ kind: 'tail', id: b.dataset.wtail, tail: b.dataset.wtail }); }
-  else if (b.dataset.case) { if (!P.watches.some(w => w.kind === 'case' && w.id === b.dataset.case)) P.watches.push({ kind: 'case', id: b.dataset.case, tail: b.dataset.tail }); }
+  const now = new Date().toISOString();
+  if (b.dataset.wtail) { if (!WL.some(w => w.kind === 'tail' && w.tail === b.dataset.wtail)) WL.push({ kind: 'tail', id: b.dataset.wtail, tail: b.dataset.wtail, added: now }); }
+  else if (b.dataset.case) { if (!WL.some(w => w.kind === 'case' && w.id === b.dataset.case)) WL.push({ kind: 'case', id: b.dataset.case, tail: b.dataset.tail, added: now }); }
   $('lookOut').innerHTML = '';
-  await saveProfile({ watches: P.watches });
+  await watchesChanged();
 });
+
+// a profile's server list and this device's list are merged both ways
+async function mergeWithProfile() {
+  if (!P) return;
+  let added = false;
+  (P.watches || []).forEach(x => { if (!WL.some(w => w.kind === x.kind && w.id === x.id)) { WL.push({ kind: x.kind, id: x.id, tail: x.tail, added: x.added }); added = true; } });
+  if (added) { keepWL(); WL.forEach(w => { if (!LIVE.has(wkey(w))) checkWatch(w); }); }
+  const missing = WL.some(w => !(P.watches || []).some(x => x.kind === w.kind && x.id === w.id));
+  if (missing) await saveProfile({ watches: forServer() }, true);
+  drawWatches(); render();
+}
 
 async function loadProfile(code) {
   const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(code));
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
-  P = await r.json(); LS.set('tpga-code', P.code); showProfile();
+  P = await r.json(); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile();
 }
-async function saveProfile(part) {
+async function saveProfile(part, quiet) {
   const body = part || {
     rules: { ...P.rules, fatal: $('rFatal').checked, newOn: $('rNew').checked,
              sev: [...$('rSev').querySelectorAll('input:checked')].map(i => i.value) },
@@ -676,12 +737,12 @@ async function saveProfile(part) {
     const r = await fetch(API + '?op=profile&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.status);
-    P = d; showProfile(); flash('Saved.');
+    P = d; showProfile(); if (!quiet) flash('Saved.');
   } catch (e) { flash('Couldn\'t save: ' + e.message, true); }
 }
 $('mkProfile').onclick = async () => {
   $('mkProfile').disabled = true;
-  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); flash('Alert profile made. Subscribe to the topic in ntfy, then send a test ping.'); }
+  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile(); flash('Alert profile made. Subscribe to the topic in ntfy, then send a test ping.'); }
   catch (e) { P = null; alert('Couldn\'t make a profile: ' + e.message); }
   $('mkProfile').disabled = false;
 };
@@ -700,6 +761,7 @@ $('copyTopic').onclick = async () => { try { await navigator.clipboard.writeText
 
 const saved = LS.get('tpga-code');
 if (saved) loadProfile(saved).catch(() => { LS.set('tpga-code', null); showProfile(); }); else showProfile();
+WL.forEach(checkWatch);
 loadFeed();
 })();
 

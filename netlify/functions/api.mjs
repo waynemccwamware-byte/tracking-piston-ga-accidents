@@ -6,13 +6,14 @@
 //   POST ?op=profile&code=…           save rules / push / email / watches (server keeps each watch's history)
 //   POST ?op=test&code=…              send a test ping
 //   GET  ?op=tail&q=N12345            NTSB cases for one N-number (for adding a watch)
+//   GET  ?op=case&n=WPR27FA039        one NTSB case (watch list status)
 //   POST ?op=refresh                  run the check now (at most once every 10 minutes)
 //
 // An alert profile is keyed by a 12-character code, like Day's Flight Schedule's sync code: anyone
 // with the code can see and change that profile. Good enough for one user now; a public version
 // would add a sign-in (see README).
 
-import { blobs, json, casesForTail, slimCase, tailKey, ntfy, APP_URL, SINCE } from '../lib/common.mjs';
+import { blobs, json, casesForTail, caseByNumber, slimCase, tailKey, ntfy, APP_URL, SINCE } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
 
 const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -73,6 +74,14 @@ export default async (req, context) => {
       if (!/^N[1-9][0-9A-Z]{0,4}$/.test(t)) return json(400, { error: 'Not a US N-number' });
       const list = (await casesForTail(t)).map(c => slimCase(c, t)).sort((a, b) => b.date.localeCompare(a.date));
       return json(200, { tail: t, cases: list });
+    }
+
+    if (op === 'case') {
+      const n = String(url.searchParams.get('n') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
+      if (!n) return json(400, { error: 'No case number' });
+      const r = await caseByNumber(n);
+      const rc = Array.isArray(r) ? r[0] : r;
+      return json(rc ? 200 : 404, rc ? { case: slimCase(rc) } : { error: 'NTSB has no case ' + n }, { 'Cache-Control': 'public, max-age=300' });
     }
 
     if (op === 'refresh' && req.method === 'POST') {
