@@ -211,6 +211,9 @@ export function family(make, model) {
 //   anything else (homebuilts, Maules, Citabrias…) is in, marked "engine not yet stated".
 const NOT_PISTON_MAKE = /^(BOEING|AIRBUS|EMBRAER|BOMBARDIER|CANADAIR|GULFSTREAM|LEARJET|DASSAULT|HONDA AIRCRAFT|HONDAJET|ATR|DE HAVILLAND CANADA|VIKING AIR|SAAB|FOKKER|MCDONNELL|LOCKHEED|ROBINSON|BELL|SIKORSKY|EUROCOPTER|AIRBUS HELICOPTERS|AGUSTA|LEONARDO|MD HELICOPTERS|HUGHES|ENSTROM|SCHWEIZER|HILLER|KAMAN|AIR TRACTOR|THRUSH|AYRES|QUEST|KODIAK|DAHER|SOCATA|EPIC|PILATUS|ECLIPSE|CIRRUS DESIGN CORP VISION|BEECH(CRAFT)? (KING|PREMIER)|TEXTRON (BELL|EAVIATION))/;
 const NOT_PISTON_MODEL = /^(208|CITATION|5\d\d|6\d\d|7\d\d|C-?208|PA-?31T|PA-?42|PA-?46-?(500|600|701)TP|B?200|B?300|350|C?90|E?90|F90|1900|99|SF50|TBM|PC-?(6|12|24)|AT-?(5|6|8)\d\d|DHC-?[2-8]|R(22|44|66)|EC|AS ?3|BO-?105|BK|UH|OH|MD ?(5|9)|369)/;
+// v0.28 (Wayne, 26-Nov-2026): jet warbird trainers, which NTSB first lists with no engine type (L-39C N339NA, 08-Nov-2026).
+// Narrow on purpose: piston warbird trainers (T-6/SNJ/Harvard, T-28, T-34A/B, Yak-52, CJ-6) stay in.
+const JET_WARBIRD_TRAINER = /^(L-?29|L-?39|L-?59|L-?159|TS-?11|ISKRA|T-?33|T-?37|A-?37|T-?38|CM-?170|MAGISTER|FOUGA|JET PROVOST|BAC.*167|STRIKEMASTER|CT-?114|CL-?41|TUTOR|MIG-?\d|S-?211|G-?4 |SUPER GALEB|HJT|HAWK MK)/;
 export function isPiston(c) {
   const cat = c.cat.toUpperCase(), eng = c.engType.toUpperCase();
   if (cat && !/^AIRPLANE/.test(cat)) return false;
@@ -218,6 +221,7 @@ export function isPiston(c) {
   const mk = c.make.toUpperCase(), mo = c.model.toUpperCase().replace(/^(CESSNA|PIPER|BEECH)\s+/, '');
   // turbine versions that the piston family regexes would otherwise catch (PA-31T Cheyenne, Lancair IV-P-T Propjet)
   if (/^PA-?31T|^PA-?42|IV-?P-?T\b|PROPJET|JETPROP/.test(mo)) return false;
+  if (/^AERO VODOCHODY/.test(mk) || JET_WARBIRD_TRAINER.test(mo)) return false;
   if (c.fam) return !TURBOPROP.has(c.fam);
   if (NOT_PISTON_MAKE.test(mk)) return false;
   if (/^(CESSNA|TEXTRON|BEECH|PIPER|HAWKER|RAYTHEON)/.test(mk) && NOT_PISTON_MODEL.test(mo)) return false;
