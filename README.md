@@ -87,3 +87,5 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
   `OWNER_HASHES` in `api.mjs` (Wayne's profile). Ops `prelim-add`, `prelim-del`.
 - Also fixed in v0.16: a new NTSB case returned by both the event-date and modified-date queries counted (and
   pinged) twice.
+- Also fixed in v0.16: once the first backfill reached the recent window it's marked done (`backfillDone`); before,
+  the first run after midnight UTC each day re-entered backfill mode for one day, and that run sent no pings.

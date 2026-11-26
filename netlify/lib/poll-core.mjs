@@ -78,7 +78,10 @@ export async function runPoll(context, { silent = false } = {}) {
   //   c) cases NTSB created or revised in the last 2 days (catches changes to older cases in the list)
   // Pings only start once the backfill is done, so the first runs don't ping weeks of old accidents.
   const recentFrom = day(T, -14);
-  const backfilling = !state.backfillTo || state.backfillTo < recentFrom;
+  // v0.16 fix: once the backfill has reached the recent window, it's done for good. Before this, the first run after
+  // midnight UTC each day re-entered backfill mode for one day (the window moves on), which also made that run quiet.
+  if (!state.backfillDone && state.backfillTo && state.backfillTo >= day(recentFrom, -3)) state.backfillDone = true;
+  const backfilling = !state.backfillDone && (!state.backfillTo || state.backfillTo < recentFrom);
   const take = (raw, quiet) => raw.forEach(rc => {
     const c = slimCase(rc);
     if (!c.ntsb || c.date < SINCE || !US(c.country) || (c.mode && !/aviation/i.test(c.mode)) || !isPiston(c)) return;
@@ -97,6 +100,7 @@ export async function runPoll(context, { silent = false } = {}) {
       const to = [day(from, 29), recentFrom].sort()[0];
       take(await casesByEventDate(from, to), true);
       state.backfillTo = to;
+      if (to >= recentFrom) state.backfillDone = true;
       status.counts.backfill = `${from} to ${to}`;
     }
   } catch (e) { errs.push('backfill: ' + e.message); }
