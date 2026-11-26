@@ -96,13 +96,14 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
 - Also fixed in v0.16: once the first backfill reached the recent window it's marked done (`backfillDone`); before,
   the first run after midnight UTC each day re-entered backfill mode for one day, and that run sent no pings.
 
-## Key stats, trend and chart (v0.24)
+## Key stats and chart (v0.33)
 
 One calendar year at a time (year picker when the list holds two; before 15-Jan the page opens on last year).
-Fatal accidents and all accidents, each with "n better/worse than trend / on trend" and a year-to-date chart
-(inline SVG) of the running count against the trend's expected running count, ± 2√expected shaded. Like for like:
-GA Accident Stats' piston types only on both sides; counted to 14 days back. v0.31: All pistons / All singles / All twins
-(remembered) and counted like GA Accident Stats' Summary: its piston types, Part 91 (blank Part counts), so the key
-stats match that app; homebuilts and other makes stay in the list but not in the key stats. `site/data/trend.json`
-carries per-year month/day lists, Part 91, split singles/twins: `fatal.S`, `fatal.T`, `all.S`, `all.T`; rebuild each January with
+All pistons / All singles / All twins (remembered), counted like GA Accident Stats' Summary: its piston types,
+Part 91 (blank Part counts). Two numbers (fatal accidents, accidents) and a small chart of fatal accidents a year:
+the 3-year average from 2002 to the last full year (GA Accident Stats data) and the selected year's quarters as
+dots at a seasonally adjusted yearly pace (count ÷ the quarter's average share of a year's fatal accidents); solid
+once a quarter ended 14+ days ago, open while it's under way. Y axis from 0; the selected year gets ~a fifth of the
+width. No "better/worse than trend" text for now (Wayne, 26-Nov-2026). `site/data/trend.json`: `years.S` / `years.T`
+(fatal accidents a year, 2000 on) and `qshare`; rebuild each January with
 `python3 tools/build-trend.py <piston-ga-stats>/site/data/accidents.json`.
