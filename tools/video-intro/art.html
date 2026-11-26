@@ -91,6 +91,14 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
 .tri{ position:absolute; inset:0; display:flex; gap:30px; padding:120px 60px 60px; }
 .tri .pane{ flex:1; position:relative; overflow:hidden; border-radius:22px; border:2px solid #232b36; background:#0f1318; }
 .tri .pane .ui{ position:absolute; width:1920px; height:2160px; transform-origin:0 0; transform:scale(.29); }
+/* YouTube thumbnails (1280x720 from a 1920x1080 render) */
+.th{ position:absolute; left:110px; top:250px; width:980px; }
+.th .k1{ font-weight:700; font-size:150px; line-height:.95; letter-spacing:-.02em; color:var(--amber); }
+.th .k2{ font-weight:700; font-size:92px; line-height:1.05; margin-top:26px; letter-spacing:-.01em; }
+.th .k3{ font:600 40px 'IBM Plex Mono',monospace; color:var(--muted); margin-top:40px; }
+#s-thA .phone{ left:auto; right:120px; top:110px; transform:rotate(6deg) scale(1.08); }
+#s-thA .note{ top:300px; }
+#s-thB .rad{ position:absolute; right:60px; top:60px; width:960px; height:960px; }
 /* radar (title, C) */
 .radar{ position:absolute; }
 </style></head><body>
@@ -232,6 +240,22 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
 <div class="scene" id="s-soc"><div class="ui" id="ui-soc"></div></div>
 <div class="scene" id="s-tri"><div class="tri"><div class="pane"><div class="ui" id="tri-vid"></div></div><div class="pane"><div class="ui" id="tri-for"></div></div><div class="pane"><div class="ui" id="tri-soc"></div></div></div>
   <div class="tag" style="color:var(--muted)">PASSIVE · whatever scrolls by</div></div>
+
+<!-- THUMBNAIL A: phone ping -->
+<div class="scene" id="s-thA">
+  <div class="th"><div class="k1">GET PINGED</div><div class="k2">on piston GA<br>accidents</div><div class="k3">free app · GeezerGeek Pilot</div></div>
+  <div class="phone"><div class="screen"><div class="date">Thursday 26 November</div><div class="clock">7:42</div>
+    <div class="note fatal"><div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">now</span></div>
+      <div class="s">FATAL: Cessna 182 N7••••</div><div class="b">A new fatal accident in a type you follow.</div></div>
+    <div class="note" style="top:470px"><div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">now</span></div>
+      <div class="s">New accident: Piper PA-28 N3••••</div><div class="b">A type you follow.</div></div>
+  </div></div>
+</div>
+<!-- THUMBNAIL B: radar with weather -->
+<div class="scene" id="s-thB">
+  <div class="rad"></div>
+  <div class="th" style="top:200px"><div class="k2" style="font-size:96px">Accidents<br>to learn from</div><div class="k1" style="font-size:118px;margin-top:22px">→ your inbox</div><div class="k3">free app · GeezerGeek Pilot</div></div>
+</div>
 
 <!-- LINK CARD (beat 6) -->
 <div class="scene" id="s-link"><div class="card2">
