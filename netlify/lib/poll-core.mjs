@@ -281,7 +281,7 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 10000 } =
   status.ok = !status.error;
   status.counts = { ...status.counts, cases: Object.keys(now).length, prelims: Object.keys(prelims).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
   status.note = seeding ? `Filling the list from ${fmtDate(SINCE)} (through ${fmtDate(state.backfillTo)}); pings start when it's done.`
-    : state.coveredFrom > SINCE ? `Filling in earlier accidents: complete back to ${fmtDate(state.coveredFrom)}, going back to ${fmtDate(SINCE)} at the next hourly check.` : '';
+    : state.coveredFrom > SINCE ? `Filling in earlier accidents: complete back to ${fmtDate(state.coveredFrom)}, going back to ${fmtDate(SINCE)} over the next few minutes.` : '';
   await B.set('status', status);
   return status;
 }
