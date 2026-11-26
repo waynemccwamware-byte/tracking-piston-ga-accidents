@@ -370,7 +370,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.17</span>
+    <span class="ver mono">v0.18</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -461,9 +461,9 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
                 <label class="ck"><input type="checkbox" value="None"> No injuries</label>
               </div>
               <div class="ctls" style="margin:4px 0">
-                <select id="rFamAdd" aria-label="Add a type"><option value="">+ type (any if none)</option></select>
+                <button type="button" class="pick-btn" id="rFamBtn" aria-expanded="false"><span class="pv" id="rFamSum">Any type</span><span class="caret">▾</span></button>
               </div>
-              <div class="chips" id="rChips"></div>
+              <div id="rFamPanel" hidden></div>
             </div>
             <label class="ck"><input type="checkbox" checked disabled> <span>Changes on my watch list</span></label>
           </div>
@@ -616,9 +616,7 @@ async function trendLine(from) {
 function fillSelects() {
   const n = {}; st.cases.forEach(c => { n[famOf(c)] = (n[famOf(c)] || 0) + 1; });
   st.famN = n;
-  if (!$('famPanel').hidden) renderPick();
-  famSummary(); syncSegs();
-  $('rFamAdd').innerHTML = '<option value="">+ type (any if none)</option>' + FAMS.map(f => `<option>${esc(f)}</option>`).join('');
+  listPick.draw(); listPick.summary(); syncSegs();
   if (!$('plSt').options.length) $('plSt').innerHTML = '<option value="">State</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 }
 
@@ -693,52 +691,57 @@ $('sevSeg').addEventListener('click', e => {
 function syncSegs() {
   [...$('sevSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.sev));
 }
-function famSummary() {
-  $('famSum').textContent = !st.fams.length ? 'All types' : st.fams.length === 1 ? st.fams[0] : `${st.fams.length} types`;
-}
 // Type picker, laid out like GA Accident Stats' Type A/B picker (v0.4). Grey numbers: accidents in this list.
 const TWINS = new Set(['Baron 55/58','Duchess 76','Travel Air 95','310/320','335/340','336/337','401-421 twins','DA42','DA62',
   'PA-23 Apache/Aztec','PA-30/39 Twin Comanche','PA-31 Navajo','PA-34 Seneca','PA-44 Seminole']);   // GA Accident Stats' TWINS list
 const QUICK = { all: ['All types', () => []], ps: ['All piston singles', () => FAMS.filter(f => !TWINS.has(f))], pm: ['All piston twins', () => FAMS.filter(f => TWINS.has(f))] };
 const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
-function renderPick() {
-  const n = st.famN || {}, S = new Set(st.fams);
-  const brands = [...new Set(FAMB.map(x => x[0]))].map(b => {
-    const fs = FAMB.filter(x => x[0] === b).map(x => x[1]);
-    const on = fs.filter(f => S.has(f)).length, tot = fs.reduce((t, f) => t + (n[f] || 0), 0);
-    const head = fs.length > 1
-      ? `<legend><label><input type="checkbox" data-brand="${esc(b)}" ${on === fs.length ? 'checked' : ''} ${on && on < fs.length ? 'data-mixed="1"' : ''}> ${esc(b)} <small style="font-weight:400;color:var(--text-muted)">all</small><span class="rn">${tot}</span></label></legend>`
-      : `<legend>${esc(b)}<span class="rn">${tot}</span></legend>`;
-    return `<fieldset class="pbrand">${head}${fs.map(f => `<label class="${n[f] ? '' : 'zero'}"><input type="checkbox" data-f="${esc(f)}" ${S.has(f) ? 'checked' : ''}><span>${esc(f)}<span class="rn">${n[f] || 0}</span></span></label>`).join('')}</fieldset>`;
-  }).join('') + `<fieldset class="pbrand"><legend>Everything else<span class="rn">${n[OTHER] || 0}</span></legend><label class="${n[OTHER] ? '' : 'zero'}"><input type="checkbox" data-f="${esc(OTHER)}" ${S.has(OTHER) ? 'checked' : ''}><span>${esc(OTHER)}<span class="rn">${n[OTHER] || 0}</span></span></label></fieldset>`;
-  const q = Object.entries(QUICK).map(([k, [lbl, fn]]) => `<button type="button" class="qbtn" data-q="${k}" aria-pressed="${sameSet(st.fams, fn())}">${lbl}</button>`).join('');
-  $('famPanel').innerHTML = `<div class="pick">
-    <div class="pick-head"><b>Types <small>· tick one or more; they are added together · grey numbers: accidents in this list · GA Accident Stats' piston types (turboprops aren't tracked here)</small></b><span class="pick-acts"><button type="button" class="btn sm" data-q="clear">Clear selections</button><button type="button" class="btn sm primary" data-done>Done</button></span></div>
-    <div class="pick-quick" role="group" aria-label="Groups">${q}</div>
-    <div class="pick-brands">${brands}</div>
-    <div class="pick-foot"><span>${st.fams.length ? `${st.fams.length} type${st.fams.length === 1 ? '' : 's'} selected: ${esc(st.fams.join(', '))}` : 'All types shown.'}</span><button type="button" class="btn sm primary" data-done>Done</button></div></div>`;
-  $('famPanel').querySelectorAll('input[data-mixed]').forEach(x => { x.indeterminate = true; });
+// v0.18: one type picker, used twice: section 1's list filter (st.fams) and section 3's ping rule (P.rules.fams).
+function makePicker({ btn, panel, sum, get, set, counts, anyLabel, note, emptyFoot, after }) {
+  const draw = () => {
+    const sel = get(), n = counts ? (st.famN || {}) : null, S = new Set(sel);
+    const rn = v => (n ? `<span class="rn">${v || 0}</span>` : '');
+    const zero = f => (n && !n[f] ? 'zero' : '');
+    const brands = [...new Set(FAMB.map(x => x[0]))].map(b => {
+      const fs = FAMB.filter(x => x[0] === b).map(x => x[1]);
+      const on = fs.filter(f => S.has(f)).length, tot = n ? fs.reduce((t, f) => t + (n[f] || 0), 0) : 0;
+      const head = fs.length > 1
+        ? `<legend><label><input type="checkbox" data-brand="${esc(b)}" ${on === fs.length ? 'checked' : ''} ${on && on < fs.length ? 'data-mixed="1"' : ''}> ${esc(b)} <small style="font-weight:400;color:var(--text-muted)">all</small>${rn(tot)}</label></legend>`
+        : `<legend>${esc(b)}${rn(tot)}</legend>`;
+      return `<fieldset class="pbrand">${head}${fs.map(f => `<label class="${zero(f)}"><input type="checkbox" data-f="${esc(f)}" ${S.has(f) ? 'checked' : ''}><span>${esc(f)}${n ? rn(n[f]) : ''}</span></label>`).join('')}</fieldset>`;
+    }).join('') + `<fieldset class="pbrand"><legend>Everything else${n ? rn(n[OTHER]) : ''}</legend><label class="${zero(OTHER)}"><input type="checkbox" data-f="${esc(OTHER)}" ${S.has(OTHER) ? 'checked' : ''}><span>${esc(OTHER)}${n ? rn(n[OTHER]) : ''}</span></label></fieldset>`;
+    const q = Object.entries(QUICK).map(([k, [lbl, fn]]) => `<button type="button" class="qbtn" data-q="${k}" aria-pressed="${sameSet(sel, fn())}">${k === 'all' ? anyLabel : lbl}</button>`).join('');
+    $(panel).innerHTML = `<div class="pick">
+      <div class="pick-head"><b>Types <small>· tick one or more; they are added together · ${note} · GA Accident Stats' piston types (turboprops aren't tracked here)</small></b><span class="pick-acts"><button type="button" class="btn sm" data-q="clear">Clear selections</button><button type="button" class="btn sm primary" data-done>Done</button></span></div>
+      <div class="pick-quick" role="group" aria-label="Groups">${q}</div>
+      <div class="pick-brands">${brands}</div>
+      <div class="pick-foot"><span>${sel.length ? `${sel.length} type${sel.length === 1 ? '' : 's'} selected: ${esc(sel.join(', '))}` : emptyFoot}</span><button type="button" class="btn sm primary" data-done>Done</button></div></div>`;
+    $(panel).querySelectorAll('input[data-mixed]').forEach(x => { x.indeterminate = true; });
+  };
+  const summary = () => {
+    const sel = get(), q = Object.values(QUICK).find(([, fn]) => sel.length && sameSet(sel, fn()));
+    $(sum).textContent = !sel.length ? anyLabel : q ? q[0] : sel.length === 1 ? sel[0] : `${sel.length} types`;
+  };
+  const changed = v => { set(v); summary(); draw(); after(); };
+  $(btn).onclick = () => { const open = $(panel).hidden; $(panel).hidden = !open; $(btn).setAttribute('aria-expanded', String(open)); if (open) draw(); };
+  $(panel).addEventListener('click', e => {
+    if (e.target.closest('[data-done]')) { $(panel).hidden = true; $(btn).setAttribute('aria-expanded', 'false'); return; }
+    const q = e.target.closest('[data-q]'); if (q) changed(q.dataset.q === 'clear' || q.dataset.q === 'all' ? [] : QUICK[q.dataset.q][1]());
+  });
+  $(panel).addEventListener('change', e => {
+    const i = e.target, sel = get();
+    if (i.dataset.brand) {
+      const fs = FAMB.filter(x => x[0] === i.dataset.brand).map(x => x[1]);
+      changed(i.checked ? [...new Set([...sel, ...fs])] : sel.filter(f => !fs.includes(f)));
+    } else if (i.dataset.f) changed(i.checked ? [...new Set([...sel, i.dataset.f])] : sel.filter(f => f !== i.dataset.f));
+  });
+  return { draw: () => { if (!$(panel).hidden) draw(); }, summary };
 }
-function famsChanged() { st.shown = 20; keepFilters(); famSummary(); renderPick(); render(); }
-function famSummary() {
-  const q = Object.values(QUICK).find(([, fn]) => st.fams.length && sameSet(st.fams, fn()));
-  $('famSum').textContent = !st.fams.length ? 'All types' : q ? q[0] : st.fams.length === 1 ? st.fams[0] : `${st.fams.length} types`;
-}
-$('famBtn').onclick = () => { const open = $('famPanel').hidden; $('famPanel').hidden = !open; $('famBtn').setAttribute('aria-expanded', String(open)); if (open) renderPick(); };
-$('famPanel').addEventListener('click', e => {
-  const d = e.target.closest('[data-done]'); if (d) { $('famPanel').hidden = true; $('famBtn').setAttribute('aria-expanded', 'false'); return; }
-  const q = e.target.closest('[data-q]'); if (q) { st.fams = q.dataset.q === 'clear' ? [] : QUICK[q.dataset.q][1](); famsChanged(); }
-});
-$('famPanel').addEventListener('change', e => {
-  const i = e.target;
-  if (i.dataset.brand) {
-    const fs = FAMB.filter(x => x[0] === i.dataset.brand).map(x => x[1]);
-    st.fams = i.checked ? [...new Set([...st.fams, ...fs])] : st.fams.filter(f => !fs.includes(f));
-  } else if (i.dataset.f) {
-    st.fams = i.checked ? [...new Set([...st.fams, i.dataset.f])] : st.fams.filter(f => f !== i.dataset.f);
-  }
-  famsChanged();
-});
+const listPick = makePicker({ btn: 'famBtn', panel: 'famPanel', sum: 'famSum', get: () => st.fams, set: v => { st.fams = v; },
+  counts: true, anyLabel: 'All types', note: 'grey numbers: accidents in this list', emptyFoot: 'All types shown.',
+  after: () => { st.shown = 20; keepFilters(); render(); } });
+const rulePick = makePicker({ btn: 'rFamBtn', panel: 'rFamPanel', sum: 'rFamSum', get: () => (P ? P.rules.fams : []), set: v => { if (P) P.rules.fams = v; },
+  counts: false, anyLabel: 'Any type', note: 'press Save to keep them', emptyFoot: 'Any type pings.', after: () => {} });
 $('q').oninput = e => { st.q = e.target.value; st.shown = 20; render(); };
 $('moreBtn').onclick = () => { st.shown += 20; render(); };
 $('list').addEventListener('click', async e => {
@@ -794,16 +797,7 @@ function showProfile() {
   $('log').innerHTML = (P.log || []).map(l => `<li>${dmyT(l.at)} · ${esc(l.text)}</li>`).join('') || '<li>None yet.</li>';
   render();
 }
-function drawChips() {
-  const r = P.rules;
-  $('rChips').innerHTML = r.fams.map(f => `<span class="chip">${esc(f)} <button type="button" data-f="${esc(f)}" aria-label="Remove">×</button></span>`).join('');
-}
-$('rChips').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.f) P.rules.fams = P.rules.fams.filter(x => x !== b.dataset.f);
-  drawChips();
-});
-$('rFamAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.fams.includes(v)) P.rules.fams.push(v); e.target.value = ''; drawChips(); };
+function drawChips() { rulePick.summary(); rulePick.draw(); }
 // v0.17: typing an email address ticks the Email box (Wayne, 25-Nov-2026)
 $('emailIn').addEventListener('input', () => { if (/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test($('emailIn').value.trim())) $('pEmail').checked = true; });
 

@@ -36,11 +36,13 @@ const prelimLine = p => `${fmtDate(p.date)} ${p.reg} ${p.make} ${p.model}, ${p.c
 const US = s => !s || /^(US|USA|UNITED STATES)$/i.test(s);
 const today = () => new Date().toISOString().slice(0, 10);
 
+export const OTHER_TYPES = 'Other types (homebuilts, Maule, Pitts…)';   // same text as the page's OTHER
 export function matchesRules(c, r) {
   if (!r || !r.newOn) return false;
   const sev = c.fatal ? 'Fatal' : c.serious ? 'Serious' : c.minor ? 'Minor' : 'None';
   if (Array.isArray(r.sev) && r.sev.length && !r.sev.includes(sev)) return false;
-  if (Array.isArray(r.fams) && r.fams.length && !r.fams.includes(c.fam)) return false;
+  // v0.18: the page's "Other types" choice (any case outside GA Accident Stats' piston types) matches cases with no family
+  if (Array.isArray(r.fams) && r.fams.length && !r.fams.includes(c.fam || OTHER_TYPES)) return false;
   return true;
 }
 
