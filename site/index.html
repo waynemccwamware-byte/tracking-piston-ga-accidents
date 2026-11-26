@@ -393,7 +393,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.31</span>
+    <span class="ver mono">v0.32</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -690,18 +690,20 @@ function drawStats2() {
   $('kstats').hidden = false;
   {
     const T = { fatal: trendFor('fatal', y), all: trendFor('all', y) };
-    [['fatal', 'trFatal'], ['all', 'trAll']].forEach(([k, id]) => trendText($(id), T[k], filling, w));
+    [['fatal', 'trFatal', fatal.length], ['all', 'trAll', acc.length]].forEach(([k, id, n]) => trendText($(id), T[k], filling, w, n));
     if (!filling && T.fatal) $('ksFoot').textContent += ` Trend: ${dmy(w.from)} to ${dmy(w.cut)}${w.complete ? '' : ` (${LAG} days back, since NTSB lists late, so the trend's count is lower than the total above)`}, against the straight-line trend of GA Accident Stats' ${T.fatal.y0}–${T.fatal.y1} counts for the same types and dates: fatal accidents ${T.fatal.actual} against about ${T.fatal.expected.toFixed(1)}, all accidents ${T.all ? T.all.actual : '–'} against about ${T.all ? T.all.expected.toFixed(1) : '–'}. "Within normal variation" means the gap is less than twice the square root of the expected count.`;
     drawChart();
   }
 }
-function trendText(el, t, filling, w) {
+function trendText(el, t, filling, w, total) {
   if (filling) { el.className = 'ks-tr wait'; el.textContent = 'trend once the year is filled in'; return; }
   if (!t) { el.className = 'ks-tr wait'; el.textContent = `trend from ${dmy(isoDay(Date.parse(w.from) + LAG * 864e5))}`; return; }
   const diff = t.diff, noise = diff !== 0 && Math.abs(t.expected - t.actual) < 2 * Math.sqrt(t.expected);
   el.className = 'ks-tr ' + (diff > 0 ? 'good' : diff < 0 ? 'bad' : 'even');
   el.innerHTML = (diff === 0 ? 'On trend' : `${Math.abs(diff)} ${diff > 0 ? 'better' : 'worse'} than trend`)
-    + `<small>${t.actual} vs about ${Math.round(t.expected)} expected to <span style="white-space:nowrap">${dmy(w.cut).slice(0, 6)}</span>${noise ? ' · within normal variation' : ''}</small>`;
+    + `<small>Through <span style="white-space:nowrap">${dmy(w.cut).slice(0, 6)}</span>: ${t.actual} vs about ${Math.round(t.expected)} expected${noise ? ' · within normal variation' : ''}</small>`
+    // v0.32: the big number counts to today, the trend to LAG days back; say so, with how many are in between
+    + (w.cut < w.end ? `<small>Since then: ${Math.max(0, total - t.actual)} more, left out of the trend until NTSB finishes listing those days.</small>` : '');
   el.title = `GA Accident Stats types only, ${dmy(w.from)} to ${dmy(w.cut)}: ${t.actual} this year against ${t.expected.toFixed(1)} expected from the ${t.y0}–${t.y1} trend.`;
 }
 
