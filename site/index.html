@@ -151,6 +151,7 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .yc-leg i.band{ height:8px; border:0; background:rgba(139,147,161,.22); }
 .seg.sm button{ padding:4px 9px; font-size:11.5px; }
 .seg[hidden]{ display:none; }
+.ks-pick{ display:flex; gap:8px; flex-wrap:wrap; }
 .pick-btn{ all:unset; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; min-width:150px; max-width:260px;
   font:13px 'IBM Plex Sans',sans-serif; color:var(--text-primary); background:#0d1117; border:1px solid var(--bezel-hi); border-radius:6px; padding:7px 9px; cursor:pointer; }
 .pick-btn:hover, .pick-btn[aria-expanded="true"]{ border-color:var(--amber-dim); }
@@ -392,7 +393,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.30</span>
+    <span class="ver mono">v0.31</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -402,7 +403,14 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
     <section class="kstats" id="kstats" aria-live="polite" hidden>
       <div class="ks-top">
         <div class="ks-h" id="ksHead"></div>
-        <div class="seg sm" id="yearSeg" role="group" aria-label="Year" hidden></div>
+        <div class="ks-pick">
+          <div class="seg sm" id="scopeSeg" role="group" aria-label="Types counted">
+            <button type="button" data-v="all" aria-pressed="true">All pistons</button>
+            <button type="button" data-v="S" aria-pressed="false">All singles</button>
+            <button type="button" data-v="T" aria-pressed="false">All twins</button>
+          </div>
+          <div class="seg sm" id="yearSeg" role="group" aria-label="Year" hidden></div>
+        </div>
       </div>
       <div class="ks-row">
         <div class="ks fatal"><span class="ks-n" id="ksFatal">–</span><span class="ks-l">Fatal accidents</span><span class="ks-tr" id="trFatal"></span></div>
@@ -640,6 +648,23 @@ $('chartSeg').addEventListener('click', e => {
   drawChart();
 });
 st.chart = LS.get('tpga-chart') === 'all' ? 'all' : 'fatal';
+// v0.31 (Wayne, 26-Nov-2026): which types the key stats count, to match GA Accident Stats' Summary; remembered
+st.scope = ['all', 'S', 'T'].includes(LS.get('tpga-scope')) ? LS.get('tpga-scope') : 'all';
+[...$('scopeSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.scope));
+$('scopeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  st.scope = b.dataset.v; LS.set('tpga-scope', st.scope);
+  [...$('scopeSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.scope));
+  drawStats();
+});
+const SCOPE_NAME = { all: 'piston', S: 'piston single', T: 'piston twin' };
+// Counted like GA Accident Stats' Summary: its piston types only (homebuilts and other makes left out), Part 91.
+// NTSB's new cases often don't say the Part yet; those count (GA Accident Stats counts a blank Part as 91 too).
+const notPart91 = c => /\b(121|125|129|133|135|137)\b/.test(c.far || '');
+const inScope = c => {
+  if (!TREND || !c.fam || notPart91(c) || !TREND.fams.includes(c.fam)) return false;
+  return st.scope === 'all' || (st.scope === 'T') === TREND.twins.includes(c.fam);
+};
 [...$('chartSeg').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === st.chart));
 
 // The window for the selected year: from 01-Jan to `end` (today, or 31-Dec for a past year); the trend counts to `cut`
@@ -649,26 +674,26 @@ function yearWin(y) {
   return { from, end: today < dec ? today : dec, cut: lagDay < dec ? lagDay : dec, complete: lagDay >= dec, current: today <= dec };
 }
 const fillingYear = y => !!(FEED && FEED.coveredFrom && FEED.coveredFrom > `${y}-01-01` && FEED.coveredFrom <= yearWin(y).end);
-function drawStats() {
+function drawStats() { loadTrend().then(drawStats2).catch(() => { $('trFatal').textContent = ''; $('trAll').textContent = ''; }); }
+function drawStats2() {
   const d = FEED, y = st.year, w = yearWin(y);
-  const acc = st.cases.filter(c => c.date.startsWith(y + '-') && isAcc(c)), fatal = acc.filter(c => c.fatal > 0);
-  $('ksHead').innerHTML = w.current ? `<b>Year to date ${y}</b> · US piston fixed-wing`
-    : `<b>${y}${w.complete ? ', full year' : ', so far'}</b> · US piston fixed-wing`;
+  const acc = st.cases.filter(c => c.date.startsWith(y + '-') && isAcc(c) && inScope(c)), fatal = acc.filter(c => c.fatal > 0);
+  $('ksHead').innerHTML = (w.current ? `<b>Year to date ${y}</b>` : `<b>${y}${w.complete ? ', full year' : ', so far'}</b>`) + ` · US ${SCOPE_NAME[st.scope]}s, Part 91`;
   $('ksTotal').textContent = acc.length.toLocaleString();
   $('ksFatal').textContent = fatal.length.toLocaleString();
   $('sinceSub').textContent = w.current ? `event dates from ${dmy(w.from)} to today` : `event dates in ${y}`;
   // still filling in earlier months (the v0.24 gap fill): no trend until the year's list is complete
   const filling = fillingYear(y);
-  let foot = 'NTSB accidents only (incidents left out), by event date, whatever the filters below are set to. NTSB lists cases days after they happen, and injury counts can be blank at first, so recent numbers run low.';
+  let foot = `Counted like GA Accident Stats' Summary: its ${SCOPE_NAME[st.scope]} types (homebuilts and other makes left out, though they're in the list below), Part 91 (a case NTSB hasn't given a Part yet counts), NTSB accidents only (incidents left out), by event date, whatever the list's filters are set to. NTSB lists cases days after they happen, so recent numbers run low.`;
   if (filling) foot += ` Still filling in accidents before ${dmy(d.coveredFrom)} (it finishes within minutes), so these numbers will rise; the trend shows once it's done.`;
   $('ksFoot').textContent = foot;
   $('kstats').hidden = false;
-  loadTrend().then(() => {
+  {
     const T = { fatal: trendFor('fatal', y), all: trendFor('all', y) };
     [['fatal', 'trFatal'], ['all', 'trAll']].forEach(([k, id]) => trendText($(id), T[k], filling, w));
-    if (!filling && T.fatal) $('ksFoot').textContent += ` Trend: GA Accident Stats' piston types only (homebuilts and other makes left out on both sides), ${dmy(w.from)} to ${dmy(w.cut)}${w.complete ? '' : ` (${LAG} days back, since NTSB lists late)`}, against the straight-line trend of ${T.fatal.y0}–${T.fatal.y1} for the same dates: fatal accidents ${T.fatal.actual} against about ${T.fatal.expected.toFixed(1)}, all accidents ${T.all ? T.all.actual : '–'} against about ${T.all ? T.all.expected.toFixed(1) : '–'}. "Within normal variation" means the gap is less than twice the square root of the expected count.`;
+    if (!filling && T.fatal) $('ksFoot').textContent += ` Trend: ${dmy(w.from)} to ${dmy(w.cut)}${w.complete ? '' : ` (${LAG} days back, since NTSB lists late, so the trend's count is lower than the total above)`}, against the straight-line trend of GA Accident Stats' ${T.fatal.y0}–${T.fatal.y1} counts for the same types and dates: fatal accidents ${T.fatal.actual} against about ${T.fatal.expected.toFixed(1)}, all accidents ${T.all ? T.all.actual : '–'} against about ${T.all ? T.all.expected.toFixed(1) : '–'}. "Within normal variation" means the gap is less than twice the square root of the expected count.`;
     drawChart();
-  }).catch(() => { $('trFatal').textContent = ''; $('trAll').textContent = ''; $('ychart').hidden = true; });
+  }
 }
 function trendText(el, t, filling, w) {
   if (filling) { el.className = 'ks-tr wait'; el.textContent = 'trend once the year is filled in'; return; }
@@ -676,7 +701,7 @@ function trendText(el, t, filling, w) {
   const diff = t.diff, noise = diff !== 0 && Math.abs(t.expected - t.actual) < 2 * Math.sqrt(t.expected);
   el.className = 'ks-tr ' + (diff > 0 ? 'good' : diff < 0 ? 'bad' : 'even');
   el.innerHTML = (diff === 0 ? 'On trend' : `${Math.abs(diff)} ${diff > 0 ? 'better' : 'worse'} than trend`)
-    + `<small>${t.actual} vs about ${Math.round(t.expected)} expected${noise ? ' · within normal variation' : ''}</small>`;
+    + `<small>${t.actual} vs about ${Math.round(t.expected)} expected to <span style="white-space:nowrap">${dmy(w.cut).slice(0, 6)}</span>${noise ? ' · within normal variation' : ''}</small>`;
   el.title = `GA Accident Stats types only, ${dmy(w.from)} to ${dmy(w.cut)}: ${t.actual} this year against ${t.expected.toFixed(1)} expected from the ${t.y0}–${t.y1} trend.`;
 }
 
@@ -689,23 +714,26 @@ const loadTrend = async () => { if (!TREND) TREND = await (await fetch('data/tre
 const md = iso => +iso.slice(5, 7) * 100 + +iso.slice(8, 10);
 const MODELS = {};
 function trendModel(kind) {
-  if (MODELS[kind]) return MODELS[kind];
-  const src = kind === 'all' ? TREND.all : TREND.years;
-  if (!src) return null;
+  const key = kind + st.scope;
+  if (MODELS[key]) return MODELS[key];
+  const g = TREND[kind === 'all' ? 'all' : 'fatal'];
+  if (!g) return null;
+  // All pistons = singles + twins; each list is sorted month/day numbers
+  const src = {};
+  Object.keys(g.S).forEach(y => { src[y] = st.scope === 'S' ? g.S[y] : st.scope === 'T' ? g.T[y] : g.S[y].concat(g.T[y]).sort((a, b) => a - b); });
   const ys = Object.keys(src).map(Number), tot = ys.map(y => src[y].length), n = ys.length;
   const mx = ys.reduce((t, y) => t + y, 0) / n, my = tot.reduce((t, v) => t + v, 0) / n;
   const slope = ys.reduce((t, y, i) => t + (y - mx) * (tot[i] - my), 0) / ys.reduce((t, y) => t + (y - mx) ** 2, 0);
   // share(mmdd) = average fraction of a year's count on or before that month/day (cached per mmdd)
   const memo = new Map();
   const share = b => { if (!memo.has(b)) memo.set(b, ys.reduce((t, y, i) => t + src[y].filter(x => x <= b).length / (tot[i] || 1), 0) / n); return memo.get(b); };
-  return (MODELS[kind] = { ys, perYear: yr => Math.max(0, my + slope * (yr - mx)), share });
+  return (MODELS[key] = { ys, perYear: yr => Math.max(0, my + slope * (yr - mx)), share });
 }
 const famsLike = () => new Set(TREND.fams);
 function trendFor(kind, y) {
   const m = trendModel(kind), w = yearWin(y);
   if (!m || w.cut < w.from) return null;
-  const F = famsLike();
-  const actual = st.cases.filter(c => c.date >= w.from && c.date <= w.cut && F.has(c.fam) && isAcc(c) && (kind === 'all' || c.fatal > 0)).length;
+  const actual = st.cases.filter(c => c.date >= w.from && c.date <= w.cut && inScope(c) && isAcc(c) && (kind === 'all' || c.fatal > 0)).length;
   const expected = m.perYear(y) * m.share(md(w.cut));
   return { actual, expected, diff: Math.round(expected - actual), y0: m.ys[0], y1: m.ys[m.ys.length - 1] };
 }
@@ -719,8 +747,7 @@ function drawChart() {
   if (!SHOW_CHART || !TREND || fillingYear(y)) { $('ychart').hidden = true; return; }
   const kind = st.chart, w = yearWin(y), m = trendModel(kind);
   if (!m) { $('ychart').hidden = true; return; }
-  const F = famsLike();
-  const mine = st.cases.filter(c => c.date.startsWith(y + '-') && F.has(c.fam) && isAcc(c) && (kind === 'all' || c.fatal > 0)).map(c => c.date).sort();
+  const mine = st.cases.filter(c => c.date.startsWith(y + '-') && inScope(c) && isAcc(c) && (kind === 'all' || c.fatal > 0)).map(c => c.date).sort();
   const days = []; for (let t = Date.parse(w.from + 'T00:00:00Z'); t <= Date.parse(`${y}-12-31T00:00:00Z`); t += 864e5) days.push(isoDay(t));
   const E = m.perYear(y), exp = days.map(dd => E * m.share(md(dd)));
   let k = 0; const act = days.map(dd => { while (k < mine.length && mine[k] <= dd) k++; return k; });

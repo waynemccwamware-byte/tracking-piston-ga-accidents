@@ -101,6 +101,8 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
 One calendar year at a time (year picker when the list holds two; before 15-Jan the page opens on last year).
 Fatal accidents and all accidents, each with "n better/worse than trend / on trend" and a year-to-date chart
 (inline SVG) of the running count against the trend's expected running count, ± 2√expected shaded. Like for like:
-GA Accident Stats' piston types only on both sides; counted to 14 days back. `site/data/trend.json` carries per-year
-month/day lists for fatal accidents (`years`) and all accidents (`all`); rebuild each January with
+GA Accident Stats' piston types only on both sides; counted to 14 days back. v0.31: All pistons / All singles / All twins
+(remembered) and counted like GA Accident Stats' Summary: its piston types, Part 91 (blank Part counts), so the key
+stats match that app; homebuilts and other makes stay in the list but not in the key stats. `site/data/trend.json`
+carries per-year month/day lists, Part 91, split singles/twins: `fatal.S`, `fatal.T`, `all.S`, `all.T`; rebuild each January with
 `python3 tools/build-trend.py <piston-ga-stats>/site/data/accidents.json`.
