@@ -375,7 +375,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.21</span>
+    <span class="ver mono">v0.22</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -709,7 +709,10 @@ function prelimRow(c) {
       <div class="acc-line l2"><span class="t"><span class="inj ${sev}">${plInj(c)}</span>${loc ? ' · ' + esc(loc) : ''} · ${c.src === 'FAA' ? 'FAA notice' : 'added by hand'}</span></div></div>`;
   }
   const links = [
-    c.srcUrl ? `<a href="${esc(c.srcUrl)}" target="_blank" rel="noopener">${c.src === 'FAA' ? 'FAA notices' : 'Source'}</a>` : '',
+    // v0.22: FAA's notice has no address of its own (one Tableau view, notice chosen in-session; checked 26-Nov-2026), so the link
+    // opens FAA's page and copies the N-number for its search box (Wayne: open the page, enter the tail number, Enter)
+    c.src === 'FAA' ? `<a href="${esc(c.srcUrl || 'https://www.faa.gov/data_research/accident_incident/preliminary_data')}" target="_blank" rel="noopener" data-copytail="${esc(c.reg)}" title="Opens FAA's notices page; ${esc(c.reg)} is copied, paste it into SEARCH TEXT and press Enter">FAA notice (search ${esc(c.reg)})</a>`
+      : c.srcUrl ? `<a href="${esc(c.srcUrl)}" target="_blank" rel="noopener">Source</a>` : '',
     c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
   ].filter(Boolean).join('');
   return `<div class="acc prelim ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
@@ -783,6 +786,8 @@ const rulePick = makePicker({ btn: 'rFamBtn', panel: 'rFamPanel', sum: 'rFamSum'
 $('q').oninput = e => { st.q = e.target.value; st.shown = 20; render(); };
 $('moreBtn').onclick = () => { st.shown += 20; render(); };
 $('list').addEventListener('click', async e => {
+  const cp = e.target.closest('a[data-copytail]');
+  if (cp) { try { navigator.clipboard.writeText(cp.dataset.copytail); } catch (err) { /* the link still opens */ } return; }
   const cl = e.target.closest('[data-close]');
   if (cl) { if (st.view === 'short') st.open.delete(cl.dataset.close); else st.open.add('-' + cl.dataset.close); render(); return; }
   if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { if (st.view === 'short') st.open.add(o.dataset.open); else st.open.delete('-' + o.dataset.open); render(); return; } }
