@@ -144,7 +144,7 @@ export default async (req, context) => {
     if (op === 'profile' && req.method === 'GET') return json(200, { ...pub(p), owner });
 
     if ((op === 'prelim-add' || op === 'prelim-del') && req.method === 'POST') {
-      if (!owner) return json(403, { error: 'Only the app owner can change prelim entries' });
+      if (!owner) return json(403, { error: 'Only the admin can change prelim entries' });
       const body = await req.json().catch(() => ({}));
       const state = (await B.get('cases')) || { cases: {} };
       state.prelims = state.prelims || {};
