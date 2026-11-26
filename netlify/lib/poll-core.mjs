@@ -41,7 +41,6 @@ export function matchesRules(c, r) {
   const sev = c.fatal ? 'Fatal' : c.serious ? 'Serious' : c.minor ? 'Minor' : 'None';
   if (Array.isArray(r.sev) && r.sev.length && !r.sev.includes(sev)) return false;
   if (Array.isArray(r.fams) && r.fams.length && !r.fams.includes(c.fam)) return false;
-  if (Array.isArray(r.states) && r.states.length && !r.states.includes(c.st)) return false;
   return true;
 }
 

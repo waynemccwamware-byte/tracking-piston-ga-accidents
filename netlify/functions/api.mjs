@@ -48,7 +48,7 @@ function cleanRules(r) {
     newOn: !!r.newOn,
     sev: arr(r.sev, 4, 10).filter(s => ['Fatal', 'Serious', 'Minor', 'None'].includes(s)),
     fams: arr(r.fams, 60, 40),
-    states: arr(r.states, 60, 3).map(s => s.toUpperCase()),
+    states: [],   // v0.17: state filter dropped
   };
 }
 

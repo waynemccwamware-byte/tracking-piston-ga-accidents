@@ -370,7 +370,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.16</span>
+    <span class="ver mono">v0.17</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -398,7 +398,6 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
           <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
         </div>
         <button type="button" class="pick-btn" id="famBtn" aria-expanded="false"><span class="pv" id="famSum">All types</span><span class="caret">▾</span></button>
-        <select id="stSel" aria-label="State"><option value="">All states</option></select>
         <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
       </div>
       <div id="famPanel" hidden></div>
@@ -463,7 +462,6 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
               </div>
               <div class="ctls" style="margin:4px 0">
                 <select id="rFamAdd" aria-label="Add a type"><option value="">+ type (any if none)</option></select>
-                <select id="rStAdd" aria-label="Add a state"><option value="">+ state (any if none)</option></select>
               </div>
               <div class="chips" id="rChips"></div>
             </div>
@@ -535,11 +533,12 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 // Filters and the Short/Full choice are remembered on this device (v0.2); the search box is not.
 const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters2') || '{}'); } catch (e) { return {}; } })();
 const st = { cases: [], prelims: [], sev: saved0.sev || 'fatal',   // v0.13: Fatal by default (Wayne, 25-Nov-2026)
-  fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
+  fams: Array.isArray(saved0.fams) ? saved0.fams : [], 
   view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
   q: '', shown: 20, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
 const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
-const keepFilters = () => LS.set('tpga-filters2', JSON.stringify({ sev: st.sev, fams: st.fams, state: st.state }));
+// v0.17: State filter dropped (Wayne, 25-Nov-2026)
+const keepFilters = () => LS.set('tpga-filters2', JSON.stringify({ sev: st.sev, fams: st.fams }));
 const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
 
@@ -618,12 +617,8 @@ function fillSelects() {
   const n = {}; st.cases.forEach(c => { n[famOf(c)] = (n[famOf(c)] || 0) + 1; });
   st.famN = n;
   if (!$('famPanel').hidden) renderPick();
-  const sts = [...new Set(st.cases.map(c => c.st).filter(Boolean).concat(st.state ? [st.state] : []))].sort();
-  $('stSel').innerHTML = '<option value="">All states</option>' + sts.map(s => `<option>${esc(s)}</option>`).join('');
-  $('stSel').value = st.state;
   famSummary(); syncSegs();
   $('rFamAdd').innerHTML = '<option value="">+ type (any if none)</option>' + FAMS.map(f => `<option>${esc(f)}</option>`).join('');
-  $('rStAdd').innerHTML = '<option value="">+ state (any if none)</option>' + STATES.map(s => `<option>${s}</option>`).join('');
   if (!$('plSt').options.length) $('plSt').innerHTML = '<option value="">State</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 }
 
@@ -634,7 +629,7 @@ function render() {
   const all = st.prelims.length ? st.cases.concat(st.prelims).sort((a, b) => b.date.localeCompare(a.date)) : st.cases;
   const list = all.filter(c =>
     (st.sev === 'all' || (st.sev === 'fatal' ? c.fatal > 0 : (c.fatal > 0 || c.serious > 0))) &&
-    (!st.fams.length || st.fams.includes(famOf(c))) && (!st.state || c.st === st.state) &&
+    (!st.fams.length || st.fams.includes(famOf(c))) &&
     (!q || [c.reg, c.city, c.make, c.model, c.ntsb, c.fam].join(' ').toUpperCase().includes(q)));
   const rows = list.slice(0, st.shown).map(c => {
     if (c.prelim) return prelimRow(c);
@@ -744,7 +739,6 @@ $('famPanel').addEventListener('change', e => {
   }
   famsChanged();
 });
-$('stSel').onchange = e => { st.state = e.target.value; st.shown = 20; keepFilters(); render(); };
 $('q').oninput = e => { st.q = e.target.value; st.shown = 20; render(); };
 $('moreBtn').onclick = () => { st.shown += 20; render(); };
 $('list').addEventListener('click', async e => {
@@ -802,17 +796,16 @@ function showProfile() {
 }
 function drawChips() {
   const r = P.rules;
-  $('rChips').innerHTML = r.fams.map(f => `<span class="chip">${esc(f)} <button type="button" data-f="${esc(f)}" aria-label="Remove">×</button></span>`).join('')
-    + r.states.map(s => `<span class="chip">${esc(s)} <button type="button" data-s="${esc(s)}" aria-label="Remove">×</button></span>`).join('');
+  $('rChips').innerHTML = r.fams.map(f => `<span class="chip">${esc(f)} <button type="button" data-f="${esc(f)}" aria-label="Remove">×</button></span>`).join('');
 }
 $('rChips').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.f) P.rules.fams = P.rules.fams.filter(x => x !== b.dataset.f);
-  if (b.dataset.s) P.rules.states = P.rules.states.filter(x => x !== b.dataset.s);
   drawChips();
 });
 $('rFamAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.fams.includes(v)) P.rules.fams.push(v); e.target.value = ''; drawChips(); };
-$('rStAdd').onchange = e => { const v = e.target.value; if (v && !P.rules.states.includes(v)) P.rules.states.push(v); e.target.value = ''; drawChips(); };
+// v0.17: typing an email address ticks the Email box (Wayne, 25-Nov-2026)
+$('emailIn').addEventListener('input', () => { if (/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test($('emailIn').value.trim())) $('pEmail').checked = true; });
 
 // ------------------------------------------------------------ watch list
 // The list lives on this device (v0.3), so watching needs no profile: you follow it here, passively.
