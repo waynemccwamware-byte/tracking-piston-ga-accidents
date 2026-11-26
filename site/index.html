@@ -115,6 +115,11 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .watch-btn{ all:unset; cursor:pointer; color:var(--text-muted); font-size:12px; border:1px solid var(--bezel-hi); border-radius:12px; padding:2px 9px; }
 .watch-btn:hover{ color:var(--amber); border-color:var(--amber); }
 .watch-btn[aria-pressed="true"]{ color:var(--amber); border-color:var(--amber-dim); background:rgba(245,166,35,.08); }
+.hist{ margin-top:6px; padding-top:6px; border-top:1px dashed var(--bezel); font-size:12px; color:var(--text-secondary, #aab2be); line-height:1.45; }
+.hist .sm{ font-size:12px; }
+.hist .hrow{ margin-top:4px; }
+.hist .hpc{ color:var(--text-primary); margin:2px 0 0 12px; }
+.hist a{ color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(63,167,160,.35); }
 .pc{ font-size:12px; color:var(--text-primary); margin-top:6px; line-height:1.45; border-top:1px dashed var(--bezel); padding-top:6px; }
 .more{ margin-top:8px; text-align:center; }
 .kstats{ border:1px solid var(--bezel); border-radius:8px; padding:10px 12px; margin-bottom:12px; background:rgba(16,20,26,0.35); }
@@ -370,7 +375,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.20</span>
+    <span class="ver mono">v0.21</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -645,7 +650,6 @@ function render() {
       reportLabel(c) ? `<a href="${pdf(c)}" target="_blank" rel="noopener">${reportLabel(c)}</a>` : '',
       c.docket && c.mkey ? `<a href="https://data.ntsb.gov/Docket?ProjectID=${c.mkey}" target="_blank" rel="noopener">NTSB docket</a>` : '',
       c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
-      c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
     ].filter(Boolean).join('');
     const w = watching(c);
     if (st.view === 'short' ? !st.open.has(c.ntsb) : st.open.has('-' + c.ntsb)) {
@@ -658,11 +662,38 @@ function render() {
       <div class="acc-mid"><span class="inj ${sev}">${injText(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
       <div class="acc-meta">${meta ? esc(meta) + '<br>' : ''}${statusTxt}</div>
       ${c.pc ? `<div class="pc"><b>NTSB probable cause:</b> ${esc(c.pc)}</div>` : ''}
+      ${histDiv(c)}
       <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button><button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
     </div>`;
   });
   $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
+  fillHist();
   $('moreWrap').hidden = list.length <= st.shown;
+}
+
+// v0.21: the aircraft's earlier NTSB cases, shown in the opened record (was a link to GA Accident Stats; Wayne, 26-Nov-2026).
+// Same NTSB lookup as the watch list (op=tail); fetched when a record opens, kept for the visit.
+const HIST = new Map();
+const histDiv = c => c.reg && okTail(c.reg) ? `<div class="hist" data-hreg="${esc(c.reg)}" data-hself="${esc(c.prelim ? '' : c.ntsb)}" data-hdate="${esc(c.date)}"></div>` : '';
+function fillHist() {
+  document.querySelectorAll('#list .hist').forEach(el => {
+    const t = el.dataset.hreg, h = HIST.get(t);
+    if (h === undefined) {
+      el.innerHTML = `<span class="sm">Earlier NTSB cases for ${esc(t)}: checking…</span>`; HIST.set(t, null);
+      fetch(API + '?op=tail&q=' + encodeURIComponent(t)).then(r => r.ok ? r.json() : Promise.reject()).then(d => { HIST.set(t, d.cases || []); fillHist(); })
+        .catch(() => { HIST.set(t, 'err'); fillHist(); });
+      return;
+    }
+    if (h === null) return;
+    if (h === 'err') { el.innerHTML = `<span class="sm">Couldn't check NTSB for earlier cases on ${esc(t)}.</span>`; return; }
+    // leave out this case (and, for a prelim entry, an NTSB case within 3 days of it)
+    const near = c => el.dataset.hself ? c.ntsb === el.dataset.hself : Math.abs(Date.parse(c.date) - Date.parse(el.dataset.hdate)) <= 3 * 864e5;
+    const list = h.filter(c => !near(c)).sort((a, b) => b.date.localeCompare(a.date));
+    el.innerHTML = !list.length ? `<span class="sm">Earlier NTSB cases for ${esc(t)}: none.</span>`
+      : `<div class="sm"><b>Earlier NTSB cases for ${esc(t)}</b> (this N-number; an older case may be a different airplane that had the same registration):</div>`
+        + list.slice(0, 6).map(c => `<div class="hrow">${dmy(c.date)} · ${esc(c.make)} ${esc(c.model)} · ${injText(c)}${c.city ? ' · ' + esc(c.city) + (c.st ? ', ' + esc(c.st) : '') : ''} · <a href="${caseUrl(c)}" target="_blank" rel="noopener">${esc(c.ntsb)}</a>${c.pc ? `<div class="hpc">${esc(c.pc)}</div>` : ''}</div>`).join('')
+        + (list.length > 6 ? `<div class="sm">…and ${list.length - 6} more.</div>` : '');
+  });
 }
 
 // v0.16 prelim rows: FAA preliminary notice (or manual entry), not in NTSB's data yet
@@ -680,12 +711,12 @@ function prelimRow(c) {
   const links = [
     c.srcUrl ? `<a href="${esc(c.srcUrl)}" target="_blank" rel="noopener">${c.src === 'FAA' ? 'FAA notices' : 'Source'}</a>` : '',
     c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
-    c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
   ].filter(Boolean).join('');
   return `<div class="acc prelim ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
     <div class="acc-top"><span class="acc-ac">${esc(c.make)} ${esc(c.model)}<span class="reg">${esc(c.reg)}</span><span class="pl">PRELIM</span></span><span class="acc-date">${dmy(c.date)}</span></div>
     <div class="acc-mid"><span class="inj ${sev}">${plInj(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
     <div class="acc-meta"><span class="prelim-note">${src}. NTSB hasn't listed this accident yet; preliminary and subject to change.</span>${c.fam && c.fam !== c.model ? '<br>' + esc(c.fam) : ''}</div>
+    ${histDiv(c)}
     <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button>${P && P.owner ? `<button class="watch-btn" type="button" data-pldel="${esc(c.ntsb)}">Remove entry</button>` : ''}<button class="watch-btn" type="button" data-wtail="${esc(c.reg)}" aria-pressed="${tw}">${tw ? '★ Watching ' + esc(c.reg) : '☆ Watch ' + esc(c.reg)}</button></div>
   </div>`;
 }
