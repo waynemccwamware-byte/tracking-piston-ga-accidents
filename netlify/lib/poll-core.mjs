@@ -63,7 +63,7 @@ const describeChange = (o, c) => {
   return bits;
 };
 
-export async function runPoll(context, { silent = false, gapBudgetMs = 10000 } = {}) {
+export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = {}) {
   const B = blobs(context);
   const started = new Date().toISOString();
   const status = { lastRun: started, ok: false, error: '', counts: {}, note: '' };
@@ -115,7 +115,7 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 10000 } =
       status.counts.backfill = `${from} to ${to}`;
     } else if (state.coveredFrom > SINCE) {
       // v0.24 gap fill, backwards, quiet: 30 days at a time before coveredFrom (not before the start gate).
-      // v0.26: as many 30-day pieces as fit in ~10 s of the run (a scheduled run gets 30 s), not one an hour.
+      // v0.26: as many 30-day pieces as fit in ~4 s of the run (the scheduler stops waiting at ~15 s), not one an hour.
       const t0 = Date.now(), top = state.coveredFrom;
       while (state.coveredFrom > SINCE && Date.now() - t0 < gapBudgetMs) {
         const to = day(state.coveredFrom, -1), from = [day(state.coveredFrom, -30), SINCE].sort()[1];

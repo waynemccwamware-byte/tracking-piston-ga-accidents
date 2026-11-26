@@ -76,12 +76,12 @@ export function noticesFromCsv(text) {
 }
 
 // v0.27: FAA's server answered 403 on the 13:23 check of 26-Nov-2026 after working all morning. Send an
-// identifying User-Agent (some front ends refuse Node's default) and try once more after a short wait.
+// identifying User-Agent (some front ends refuse Node's default). v0.30: no in-run retry; the next check retries.
 const FAA_HEADERS = { Accept: 'text/csv, text/plain;q=0.9, */*;q=0.5',
   'User-Agent': 'Mozilla/5.0 (compatible; GeezerGeekPilot-TrackingPistonGA/1.0; +https://tracking-piston-ga-accidents.netlify.app/)' };
-export async function fetchFaaNotices(ms = 8000) {
+export async function fetchFaaNotices(ms = 5000) {
   let last;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {   // v0.30: one try (runs must stay short); the next check tries again
     if (i) await new Promise(r => setTimeout(r, 2500));
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
     try {
