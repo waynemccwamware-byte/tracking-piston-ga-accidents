@@ -1,7 +1,7 @@
 # Tracking Piston GA Accidents
 
-GeezerGeek Pilot app (draft v0.1, 25-Nov-2026). New US piston fixed-wing accidents from NTSB since
-01-Oct-2026, a ping on every fatal accident, other pings by severity / type / state, and watches on an
+GeezerGeek Pilot app (draft v0.1, 25-Nov-2026). New US piston fixed-wing accidents from NTSB by
+calendar year (this year and last, from 01-Jan-2026; v0.24), a ping on every fatal accident, other pings by severity / type / state, and watches on an
 NTSB case or an N-number that ping when NTSB adds or changes something.
 
 Live: https://tracking-piston-ga-accidents.netlify.app/ · Netlify deploys from `main`, publish dir `site/`.
@@ -33,7 +33,13 @@ rules, email, watches with what was last seen, recent pings).
 
 ## How the check works
 
-1. Ask NTSB (Common/v2/GetCasesByDateRange, mode=aviation) for the last 14 days of event dates and for cases revised in the last 2 days (Common/v1/GetCasesByModifiedDateRange); first runs backfill 01-Oct-2026 on, 10 days a run, without pinging.
+1. Ask NTSB (Common/v2/GetCasesByDateRange, mode=aviation) for the last 14 days of event dates and for cases revised in the last 2 days (Common/v1/GetCasesByModifiedDateRange); first runs backfill from the start gate, 30 days a run, without pinging.
+   Start gate (v0.24): 01-Jan of last year, never before 01-Jan-2026 (`sinceFor` in common.mjs); each 01-Jan the oldest year drops off.
+   `cases.coveredFrom` = the list is complete from that date. The v0.23 list (from 01-Oct-2026) is filled back to the
+   gate 30 days per run, newest month first, quietly. Only a case dated on or after coveredFrom (as it stood at the start
+   of the run) that wasn't in the list before pings as new, so a not-yet-filled month never pings.
+   Watch pings go out only for a change a pilot would call an update (status, report, docket, probable cause published
+   or revised, case closed, injuries); a fingerprint change with none of those is stored without a ping.
 2. Keep US cases where NTSB lists an airplane with a reciprocating engine, or, without an engine type,
    a model in GA Accident Stats' piston families (port of `build/families.py`).
 3. New cases ping profiles whose rules match (fatal always, unless turned off). The very first run fills
@@ -74,7 +80,7 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
   no sign-in, checked 25-Nov-2026). It covers notices entered in the last 10 business days. The export copies the
   dashboard layout: one notice is ~7 lines joined by `UniqueID`. If the header changes, the check records
   "FAA notices: … layout changed" in its status and carries on.
-- Kept: US (state given), event type ACCIDENT, event date from 01-Oct-2026, and piston airplanes by the same test as
+- Kept: US (state given), event type ACCIDENT, event date from the start gate, and piston airplanes by the same test as
   NTSB cases (`isPiston`) plus an FAA make deny list (`FAA_NOT_PISTON`: helicopters, balloons, drones, HondaJet…).
 - Stored in Blobs `cases.prelims` keyed `P-<N-number>-<event date>`. Dropped when NTSB lists a case with the same
   N-number and an event date within 3 days, or after 120 days.
@@ -89,3 +95,12 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
   pinged) twice.
 - Also fixed in v0.16: once the first backfill reached the recent window it's marked done (`backfillDone`); before,
   the first run after midnight UTC each day re-entered backfill mode for one day, and that run sent no pings.
+
+## Key stats, trend and chart (v0.24)
+
+One calendar year at a time (year picker when the list holds two; before 15-Jan the page opens on last year).
+Fatal accidents and all accidents, each with "n better/worse than trend / on trend" and a year-to-date chart
+(inline SVG) of the running count against the trend's expected running count, ± 2√expected shaded. Like for like:
+GA Accident Stats' piston types only on both sides; counted to 14 days back. `site/data/trend.json` carries per-year
+month/day lists for fatal accidents (`years`) and all accidents (`all`); rebuild each January with
+`python3 tools/build-trend.py <piston-ga-stats>/site/data/accidents.json`.

@@ -9,7 +9,13 @@
 //   sendEmail — email pings through Resend (see below)
 
 export const STORE = 'tracking-piston-ga-accidents';
-export const SINCE = '2026-10-01';          // first accident date gathered (Wayne, 25-Nov-2026)
+// Start gate (v0.24, Wayne 26-Nov-2026): the list keeps the current year and the previous one, never earlier than
+// 01-Jan-2026 (it began 01-Oct-2026 and was filled back to 01-Jan-2026). Each 01-Jan the oldest year drops off; keeping
+// last year means late-December accidents NTSB lists in January still come in (and ping), and last year's final
+// trend stays one tap away.
+export const FIRST_DAY = '2026-01-01';
+export const sinceFor = iso => { const s = `${+iso.slice(0, 4) - 1}-01-01`; return s > FIRST_DAY ? s : FIRST_DAY; };
+export const sinceNow = () => sinceFor(new Date().toISOString().slice(0, 10));
 export const APP_URL = 'https://tracking-piston-ga-accidents.netlify.app/';
 export const STATS_URL = 'https://piston-ga-stats.netlify.app/';
 

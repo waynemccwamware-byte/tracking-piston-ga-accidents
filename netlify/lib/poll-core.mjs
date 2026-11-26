@@ -3,13 +3,14 @@
 //
 // Blobs keys (store tracking-piston-ga-accidents):
 //   cases       {asOf, cases:{<ntsb>: slim case + fp}, prelims:{<P-reg-date>: prelim entry}}
-//               every piston fixed-wing US case since SINCE, plus prelim entries NTSB hasn't listed yet (v0.16)
+//               every piston fixed-wing US case from the start gate (sinceFor: this year and last, from 01-Jan-2026),
+//               plus prelim entries NTSB hasn't listed yet (v0.16); coveredFrom = the list is complete from this date (v0.24)
 //   status      {lastRun, ok, error, counts, note}
 //   users       [codes]                                    index of alert profiles
 //   user/<code> {code, email, emailOn, rules, watches, log}  one alert profile (see api.mjs)
 
 import {
-  blobs, SINCE, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
+  blobs, sinceFor, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
   sendEmail, unsubUrl, CAP_DAY_ALL, CAP_DAY_PROFILE, caseLine, injuryText, reportPdf, fmtDate, tailKey, family,
 } from './common.mjs';
 import { fetchFaaNotices, FAA_NOT_PISTON, FAA_PAGE, prelimId } from './faa-prelim.mjs';
@@ -55,9 +56,11 @@ const describeChange = (o, c) => {
   if (o.docket !== c.docket && c.docket) bits.push('public docket opened');
   if (o.reportDate !== c.reportDate && c.reportDate) bits.push(`report dated ${fmtDate(c.reportDate)}`);
   if (!o.pc && c.pc) bits.push('probable cause published');
+  else if (typeof o.pc === 'string' && o.pc && c.pc && o.pc !== c.pc)   // before v0.24 only a 1 was kept bits.push('probable cause revised');
   if (!o.closed && c.closed) bits.push('case closed');
-  if (o.fatal !== c.fatal || o.serious !== c.serious) bits.push(`injuries now ${injuryText(c)}`);
-  return bits.length ? bits : ['details updated'];
+  if (o.fatal !== c.fatal || o.serious !== c.serious || (o.highest !== undefined && o.highest !== c.highest)) bits.push(`injuries now ${injuryText(c)}`);
+  // v0.24: nothing a pilot would call an update (Wayne, 26-Nov-2026) → [] and no ping; the new fingerprint is still kept
+  return bits;
 };
 
 export async function runPoll(context, { silent = false } = {}) {
@@ -72,6 +75,13 @@ export async function runPoll(context, { silent = false } = {}) {
   const fresh = [], changed = [];
   const day = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
   const T = today();
+  const SINCE = sinceFor(T);
+  // v0.24: the list is complete from coveredFrom on. A list made before v0.24 (start 01-Oct-2026) is filled back to the
+  // start gate a month per run, newest month first, quietly. Only a case dated on or after coveredFrom that wasn't in
+  // the list before pings as new, so a case from a month not filled in yet (e.g. one NTSB revised today) never does.
+  if (!state.coveredFrom) state.coveredFrom = (state.backfillTo || state.backfillDone) ? '2026-10-01' : SINCE;
+  if (state.coveredFrom < SINCE) state.coveredFrom = SINCE;
+  const pingFrom = state.coveredFrom;   // fixed for this run, before this run's gap fill moves coveredFrom back
 
   // Every run stays inside the 30 s a scheduled function gets:
   //   a) backfill: until it reaches 14 days ago, the next 30 days of event dates from 01-Oct-2026 (silent)
@@ -91,7 +101,7 @@ export async function runPoll(context, { silent = false } = {}) {
     now[c.ntsb] = c;
     if (quiet) return;
     // a new case usually comes back from both the event-date and the modified-date query: count it once (v0.16 fix)
-    if (!o) { if (!fresh.some(x => x.ntsb === c.ntsb)) fresh.push(c); }
+    if (!o) { if (c.date >= pingFrom && !fresh.some(x => x.ntsb === c.ntsb)) fresh.push(c); }
     else if (o.fp !== c.fp && !changed.some(([, x]) => x.ntsb === c.ntsb)) changed.push([o, c]);
   });
   const errs = [];
@@ -103,6 +113,12 @@ export async function runPoll(context, { silent = false } = {}) {
       state.backfillTo = to;
       if (to >= recentFrom) state.backfillDone = true;
       status.counts.backfill = `${from} to ${to}`;
+    } else if (state.coveredFrom > SINCE) {
+      // v0.24 gap fill, backwards: the 30 days before coveredFrom (not before the start gate), quiet
+      const to = day(state.coveredFrom, -1), from = [day(state.coveredFrom, -30), SINCE].sort()[1];
+      take(await casesByEventDate(from, to), true);
+      state.coveredFrom = from;
+      status.counts.gapFill = `${from} to ${to}`;
     }
   } catch (e) { errs.push('backfill: ' + e.message); }
   const quiet = backfilling;
@@ -128,7 +144,8 @@ export async function runPoll(context, { silent = false } = {}) {
   } catch (e) { errs.push('FAA notices: ' + e.message); }
   status.error = errs.join('; ');
   // re-apply the piston test to stored cases, so a tightened rule also clears earlier entries
-  Object.keys(now).forEach(k => { if (!isPiston(now[k])) delete now[k]; });
+  // and drop cases from before the start gate (each 01-Jan the oldest year goes; watches check NTSB directly, so they keep working)
+  Object.keys(now).forEach(k => { if (!isPiston(now[k]) || now[k].date < SINCE) delete now[k]; });
   const seeding = backfilling;
 
   // prelim entries that NTSB now lists drop out; an NTSB case whose prelim already sent its fatal ping
@@ -227,15 +244,15 @@ export async function runPoll(context, { silent = false } = {}) {
       for (const c of list) {
         const old = w.fps[c.ntsb];
         if (old && old.fp === c.fp) continue;
-        if (!firstLook && !silent) {
-          const what = describeChange(old && old.c, c);
+        const what = describeChange(old && old.c, c);
+        if (!firstLook && !silent && what.length) {
           await send(p, {
             title: `Watch ${w.kind === 'tail' ? w.tail : w.id}: ${what[0]}`,
             body: `${caseLine(c)}\n${what.join('; ')}\nNTSB ${c.ntsb}${reportPdf(c) && c.status === 'Completed' ? '\nReport: ' + reportPdf(c) : ''}`,
             priority: 4, tags: 'eyes', click: APP_URL + '?case=' + encodeURIComponent(c.ntsb),
           });
         }
-        w.fps[c.ntsb] = { fp: c.fp, c: { status: c.status, profile: c.profile, factual: c.factual, docket: c.docket, reportDate: c.reportDate, pc: c.pc ? 1 : 0, closed: c.closed, fatal: c.fatal, serious: c.serious } };
+        w.fps[c.ntsb] = { fp: c.fp, c: { status: c.status, profile: c.profile, factual: c.factual, docket: c.docket, reportDate: c.reportDate, pc: c.pc || '', closed: c.closed, fatal: c.fatal, serious: c.serious, highest: c.highest } };
         dirty = true;
       }
       if ((w.kind === 'tail' ? byTail.get(w.tail) : byCase.get(w.id)) != null) { w.checked = started; dirty = true; }
@@ -253,7 +270,8 @@ export async function runPoll(context, { silent = false } = {}) {
   await B.set('cases', state);
   status.ok = !status.error;
   status.counts = { ...status.counts, cases: Object.keys(now).length, prelims: Object.keys(prelims).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
-  status.note = seeding ? `Filling the list from 01-Oct-2026 (through ${state.backfillTo}); pings start when it's done.` : '';
+  status.note = seeding ? `Filling the list from ${fmtDate(SINCE)} (through ${fmtDate(state.backfillTo)}); pings start when it's done.`
+    : state.coveredFrom > SINCE ? `Filling in earlier accidents: complete back to ${fmtDate(state.coveredFrom)}, going back to ${fmtDate(SINCE)} a month an hour.` : '';
   await B.set('status', status);
   return status;
 }

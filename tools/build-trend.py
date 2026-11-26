@@ -3,7 +3,8 @@
 
 Source: GA Accident Stats' bundled NTSB data (piston-ga-stats repo, site/data/accidents.json), which covers
 only its listed piston families (no homebuilts or other makes). For each of the last ten full years it keeps
-the month/day of every fatal accident in those families, so the page can count any date window per year.
+the month/day of every fatal accident in those families ("years") and of every accident ("all", v0.24), so the
+page can count any date window per year for both key stats.
 
 Usage: python3 tools/build-trend.py /path/to/piston-ga-stats/site/data/accidents.json
 Re-run once a year (or after GA Accident Stats' monthly update) and commit the result.
@@ -18,9 +19,10 @@ piston = {i for i, (brand, fam) in enumerate(m['fams']) if m['eng'][i] == 'P' an
 last = int(m['ntsbAsOf'][:4]) - 1          # last full year in the data
 years = list(range(last - 9, last + 1))
 out = {'source': 'GA Accident Stats (piston-ga-stats site/data/accidents.json)', 'ntsbAsOf': m['ntsbAsOf'],
-       'fams': sorted({m['fams'][i][1] for i in piston}), 'years': {}}
+       'fams': sorted({m['fams'][i][1] for i in piston}), 'years': {}, 'all': {}}
 for y in years:
     out['years'][str(y)] = sorted(r[C['m']] * 100 + r[C['d']] for r in src['rows']
                                   if r[C['y']] == y and r[C['fam']] in piston and r[C['fatal']] > 0)
+    out['all'][str(y)] = sorted(r[C['m']] * 100 + r[C['d']] for r in src['rows'] if r[C['y']] == y and r[C['fam']] in piston)
 json.dump(out, open('site/data/trend.json', 'w'), separators=(',', ':'))
-print({y: len(v) for y, v in out['years'].items()})
+print({y: (len(out['all'][y]), len(v)) for y, v in out['years'].items()})

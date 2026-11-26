@@ -1,6 +1,6 @@
 // Tracking Piston GA Accidents: the page's server calls.
 //
-//   GET  ?op=feed                     accident list since 01-Oct-2026 + last check status
+//   GET  ?op=feed                     accident list (this year and last, from 01-Jan-2026) + last check status
 //   POST ?op=profile-new              new alert profile -> {code, ...}
 //   GET  ?op=profile&code=XXXX-XXXX-XXXX
 //   POST ?op=profile&code=…           save rules / email / watches (server keeps each watch's history)
@@ -18,7 +18,7 @@
 // with the code can see and change that profile. Good enough for one user now; a public version
 // would add a sign-in (see README).
 
-import { blobs, json, page, apiUrl, unsubUrl, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, SINCE } from '../lib/common.mjs';
+import { blobs, json, page, apiUrl, unsubUrl, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, sinceNow, fmtDate } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
 import { prelimId, stateCode } from '../lib/faa-prelim.mjs';
 import { family } from '../lib/common.mjs';
@@ -87,7 +87,7 @@ export default async (req, context) => {
         .sort((a, b) => b.date.localeCompare(a.date) || b.ntsb.localeCompare(a.ntsb));
       const prelims = Object.values((state && state.prelims) || {}).map(({ notified, firstSeen, quietSeed, ...p }) => p)
         .sort((a, b) => b.date.localeCompare(a.date));
-      return json(200, { since: SINCE, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
+      return json(200, { since: sinceNow(), coveredFrom: (state && state.coveredFrom) || null, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
         { 'Cache-Control': 'public, max-age=60' });
     }
 
@@ -155,7 +155,7 @@ export default async (req, context) => {
       } else {
         const reg = tailKey(body.reg), date = String(body.date || '').slice(0, 10);
         if (!/^N[1-9][0-9A-Z]{0,4}$/.test(reg)) return json(400, { error: 'Not a US N-number' });
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < SINCE || date > new Date().toISOString().slice(0, 10)) return json(400, { error: 'Event date must be from 01-Oct-2026 to today' });
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < sinceNow() || date > new Date().toISOString().slice(0, 10)) return json(400, { error: `Event date must be from ${fmtDate(sinceNow())} to today` });
         const st = stateCode(body.st);
         if (!st) return json(400, { error: 'Pick a US state' });
         const srcUrl = /^https:\/\/[^\s<>"]{3,300}$/.test(String(body.url || '').trim()) ? String(body.url).trim() : '';
