@@ -11,6 +11,8 @@
 //   GET  ?op=confirm&code=…&t=…      the link in that email: confirms the address (HTML page)
 //   GET  ?op=unsub&code=…&t=…        one-click stop from any ping email (HTML page)
 //   POST ?op=refresh                  run the check now (at most once every 10 minutes)
+//   POST ?op=prelim-add&code=…        add a manual prelim entry (owner's profile only, v0.16)
+//   POST ?op=prelim-del&code=…        remove a prelim entry (owner's profile only)
 //
 // An alert profile is keyed by a 12-character code, like Day's Flight Schedule's sync code: anyone
 // with the code can see and change that profile. Good enough for one user now; a public version
@@ -18,6 +20,13 @@
 
 import { blobs, json, page, apiUrl, unsubUrl, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, SINCE } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
+import { prelimId, stateCode } from '../lib/faa-prelim.mjs';
+import { family } from '../lib/common.mjs';
+
+// Profiles allowed to add or remove prelim entries, by SHA-256 of the profile code (so the code itself isn't in
+// the repo). Wayne's profile 286D-…, 25-Nov-2026.
+const OWNER_HASHES = new Set(['175f01d0fdeb7d79cd20beba07e1d44e75e3d82500d2110a9691f99cb83d30a1']);
+const isOwner = async code => OWNER_HASHES.has([...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)))].map(b => b.toString(16).padStart(2, '0')).join(''));
 
 const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
@@ -76,7 +85,9 @@ export default async (req, context) => {
       const [state, status] = await Promise.all([B.get('cases'), B.get('status')]);
       const cases = Object.values((state && state.cases) || {}).map(({ fp, ...c }) => c)
         .sort((a, b) => b.date.localeCompare(a.date) || b.ntsb.localeCompare(a.ntsb));
-      return json(200, { since: SINCE, asOf: state ? state.asOf : null, status: status || null, cases },
+      const prelims = Object.values((state && state.prelims) || {}).map(({ notified, firstSeen, quietSeed, ...p }) => p)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      return json(200, { since: SINCE, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
         { 'Cache-Control': 'public, max-age=60' });
     }
 
@@ -129,7 +140,34 @@ export default async (req, context) => {
     const p = await B.get('user/' + code);
     if (!p) return json(404, { error: 'No profile with that code' });
 
-    if (op === 'profile' && req.method === 'GET') return json(200, pub(p));
+    const owner = await isOwner(code);
+    if (op === 'profile' && req.method === 'GET') return json(200, { ...pub(p), owner });
+
+    if ((op === 'prelim-add' || op === 'prelim-del') && req.method === 'POST') {
+      if (!owner) return json(403, { error: 'Only the app owner can change prelim entries' });
+      const body = await req.json().catch(() => ({}));
+      const state = (await B.get('cases')) || { cases: {} };
+      state.prelims = state.prelims || {};
+      if (op === 'prelim-del') {
+        const id = String(body.id || '');
+        if (!state.prelims[id]) return json(404, { error: 'No prelim entry ' + id });
+        delete state.prelims[id];
+      } else {
+        const reg = tailKey(body.reg), date = String(body.date || '').slice(0, 10);
+        if (!/^N[1-9][0-9A-Z]{0,4}$/.test(reg)) return json(400, { error: 'Not a US N-number' });
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < SINCE || date > new Date().toISOString().slice(0, 10)) return json(400, { error: 'Event date must be from 01-Oct-2026 to today' });
+        const st = stateCode(body.st);
+        if (!st) return json(400, { error: 'Pick a US state' });
+        const srcUrl = /^https:\/\/[^\s<>"]{3,300}$/.test(String(body.url || '').trim()) ? String(body.url).trim() : '';
+        const make = String(body.make || '').trim().toUpperCase().slice(0, 40), model = String(body.model || '').trim().toUpperCase().slice(0, 40);
+        const fam = family(make, model), id = prelimId(reg, date);
+        state.prelims[id] = { prelim: true, id, src: 'Manual', srcUrl, entered: new Date().toISOString().slice(0, 10), date, reg, make, model,
+          city: String(body.city || '').trim().toUpperCase().slice(0, 40), st, type: 'ACCIDENT', fatal: !!body.fatal,
+          brand: fam[0] || '', fam: fam[1] || '', notified: false, firstSeen: new Date().toISOString() };
+      }
+      await B.set('cases', state);
+      return json(200, { ok: true });
+    }
 
     if (op === 'profile' && req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
@@ -145,7 +183,7 @@ export default async (req, context) => {
       let confirm = null;
       if (sendConfirm) confirm = await sendConfirmEmail(p);
       await B.set('user/' + code, p);
-      return json(200, { ...pub(p), confirm });
+      return json(200, { ...pub(p), owner, confirm });
     }
 
     if (op === 'confirm-again' && req.method === 'POST') {
@@ -153,7 +191,7 @@ export default async (req, context) => {
       if (p.confirmSentAt && Date.now() - Date.parse(p.confirmSentAt) < 60e3) return json(429, { error: 'Sent less than a minute ago' });
       const r = await sendConfirmEmail(p);
       await B.set('user/' + code, p);
-      return json(r.ok ? 200 : 502, { ...pub(p), confirm: r });
+      return json(r.ok ? 200 : 502, { ...pub(p), owner, confirm: r });
     }
 
     if (op === 'test' && req.method === 'POST') {

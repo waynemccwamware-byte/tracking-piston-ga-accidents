@@ -2,15 +2,36 @@
 // Run hourly by netlify/functions/poll.mjs (scheduled) and on demand by api.mjs (?op=refresh, throttled).
 //
 // Blobs keys (store tracking-piston-ga-accidents):
-//   cases       {asOf, cases:{<ntsb>: slim case + fp}}   every piston fixed-wing US case since SINCE
+//   cases       {asOf, cases:{<ntsb>: slim case + fp}, prelims:{<P-reg-date>: prelim entry}}
+//               every piston fixed-wing US case since SINCE, plus prelim entries NTSB hasn't listed yet (v0.16)
 //   status      {lastRun, ok, error, counts, note}
 //   users       [codes]                                    index of alert profiles
 //   user/<code> {code, email, emailOn, rules, watches, log}  one alert profile (see api.mjs)
 
 import {
   blobs, SINCE, APP_URL, casesByEventDate, casesModified, caseByNumber, casesForTail, slimCase, isPiston, fingerprint,
-  sendEmail, unsubUrl, CAP_DAY_ALL, CAP_DAY_PROFILE, caseLine, injuryText, reportPdf, fmtDate, tailKey,
+  sendEmail, unsubUrl, CAP_DAY_ALL, CAP_DAY_PROFILE, caseLine, injuryText, reportPdf, fmtDate, tailKey, family,
 } from './common.mjs';
+import { fetchFaaNotices, FAA_NOT_PISTON, FAA_PAGE, prelimId } from './faa-prelim.mjs';
+
+// v0.16 prelim entries: FAA preliminary notices (and Wayne's manual ones) for accidents NTSB hasn't listed yet.
+// Shown with a PRELIM badge, left out of the key stats and trend, and dropped once NTSB lists a case with the
+// same N-number and an event date within 3 days (or after 120 days).
+export const PRELIM_MATCH_DAYS = 3, PRELIM_KEEP_DAYS = 120;
+export function prelimFromNotice(n) {
+  const fam = family(n.make, n.model);
+  return { prelim: true, id: prelimId(n.reg, n.date), src: 'FAA', srcUrl: FAA_PAGE, entered: n.entered || '', date: n.date,
+    reg: n.reg, make: n.make, model: n.model, city: n.city, st: n.st, type: n.type || 'ACCIDENT', fatal: !!n.fatal,
+    brand: fam[0] || '', fam: fam[1] || '' };
+}
+export function prelimIsPiston(n) {
+  const mk = String(n.make || '').toUpperCase();
+  if (FAA_NOT_PISTON.test(mk)) return false;
+  const fam = family(n.make, n.model);
+  return isPiston({ cat: '', engType: '', make: n.make || '', model: n.model || '', fam: fam[1] || '' });
+}
+const dayDiff = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;
+const prelimLine = p => `${fmtDate(p.date)} ${p.reg} ${p.make} ${p.model}, ${p.city}${p.st ? ', ' + p.st : ''}`;
 
 const US = s => !s || /^(US|USA|UNITED STATES)$/i.test(s);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -65,7 +86,9 @@ export async function runPoll(context, { silent = false } = {}) {
     const o = prior[c.ntsb];
     now[c.ntsb] = c;
     if (quiet) return;
-    if (!o) fresh.push(c); else if (o.fp !== c.fp) changed.push([o, c]);
+    // a new case usually comes back from both the event-date and the modified-date query: count it once (v0.16 fix)
+    if (!o) { if (!fresh.some(x => x.ntsb === c.ntsb)) fresh.push(c); }
+    else if (o.fp !== c.fp && !changed.some(([, x]) => x.ntsb === c.ntsb)) changed.push([o, c]);
   });
   const errs = [];
   try {
@@ -82,10 +105,38 @@ export async function runPoll(context, { silent = false } = {}) {
   catch (e) { errs.push('recent: ' + e.message); }
   try { const raw = await casesModified(day(T, -2), T); take(raw, quiet); status.counts.modified = raw.length; }
   catch (e) { errs.push('modified: ' + e.message); }
+
+  // 1b. FAA preliminary notices (the last 10 business days). The first read is quiet, so the notices already
+  //     listed when this went live don't all ping at once.
+  const prelims = { ...(state.prelims || {}) };
+  try {
+    const ns = await fetchFaaNotices();
+    let kept = 0;
+    for (const n of ns) {
+      if (!/ACCIDENT/.test(n.type) || !n.st || n.date < SINCE || !prelimIsPiston(n)) continue;
+      const e = prelimFromNotice(n), old = prelims[e.id];
+      prelims[e.id] = old ? { ...old, ...e, notified: old.notified, firstSeen: old.firstSeen } : { ...e, notified: !state.prelimSeeded, quietSeed: !state.prelimSeeded, firstSeen: started };
+      kept++;
+    }
+    state.prelimSeeded = true;
+    status.counts.faa = `${ns.length} notices, ${kept} piston accidents`;
+  } catch (e) { errs.push('FAA notices: ' + e.message); }
   status.error = errs.join('; ');
   // re-apply the piston test to stored cases, so a tightened rule also clears earlier entries
   Object.keys(now).forEach(k => { if (!isPiston(now[k])) delete now[k]; });
   const seeding = backfilling;
+
+  // prelim entries that NTSB now lists drop out; an NTSB case whose prelim already sent its fatal ping
+  // doesn't ping again as new (prelims recorded quietly at the first FAA read let the NTSB case ping)
+  const pingedViaPrelim = new Set();
+  const nowList = Object.values(now);
+  Object.keys(prelims).forEach(k => {
+    const pr = prelims[k];
+    const hit = nowList.find(c => c.reg === pr.reg && dayDiff(c.date, pr.date) <= PRELIM_MATCH_DAYS);
+    if (hit) { if (pr.notified && pr.fatal && !pr.quietSeed) pingedViaPrelim.add(hit.ntsb); delete prelims[k]; return; }
+    if (dayDiff(pr.date, T) > PRELIM_KEEP_DAYS) delete prelims[k];
+  });
+  const freshPrelims = seeding ? [] : Object.values(prelims).filter(pr => !pr.notified && pr.fatal);
 
   // 2. alert profiles
   const codes = (await B.get('users')) || [];
@@ -134,7 +185,18 @@ export async function runPoll(context, { silent = false } = {}) {
   for (const p of profiles) {
     let dirty = false;
     if (!seeding) {
+      for (const pr of freshPrelims) {
+        if (p.rules?.fatal !== false || matchesRules({ fatal: 1, fam: pr.fam, st: pr.st }, p.rules)) {
+          await send(p, {
+            title: `FATAL (prelim): ${pr.make} ${pr.model} ${pr.reg}`,
+            body: `${prelimLine(pr)}\n${pr.src === 'FAA' ? 'FAA preliminary notice' + (pr.entered ? ' entered ' + fmtDate(pr.entered) : '') : 'Prelim entry'}; NTSB hasn't listed it yet. Preliminary and subject to change.`,
+            click: APP_URL + '?case=' + encodeURIComponent(pr.id),
+          });
+          dirty = true;
+        }
+      }
       for (const c of fresh) {
+        if (pingedViaPrelim.has(c.ntsb)) continue;
         const isFatal = c.fatal > 0;
         if ((isFatal && p.rules?.fatal !== false) || matchesRules(c, p.rules)) {
           await send(p, {
@@ -179,11 +241,13 @@ export async function runPoll(context, { silent = false } = {}) {
   }
 
   if (sent) await B.set('sends', sends);
+  if (!silent) Object.values(prelims).forEach(pr => { pr.notified = true; });
   state.cases = now;
+  state.prelims = prelims;
   state.asOf = started;
   await B.set('cases', state);
   status.ok = !status.error;
-  status.counts = { ...status.counts, cases: Object.keys(now).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
+  status.counts = { ...status.counts, cases: Object.keys(now).length, prelims: Object.keys(prelims).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
   status.note = seeding ? `Filling the list from 01-Oct-2026 (through ${state.backfillTo}); pings start when it's done.` : '';
   await B.set('status', status);
   return status;

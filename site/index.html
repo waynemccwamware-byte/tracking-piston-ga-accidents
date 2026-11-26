@@ -170,6 +170,10 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .acc-line .r{ font-family:'IBM Plex Mono',monospace; color:var(--amber); flex:none; }
 .acc-line .t{ overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; }
 .acc-line .w{ flex:none; color:var(--amber); }
+/* v0.16 prelim entries (FAA preliminary notices / manual), not yet in NTSB's data */
+.acc.prelim{ border-left-style:dashed; }
+.pl{ display:inline-block; flex:none; font-size:10.5px; font-weight:600; letter-spacing:.05em; line-height:1.4; padding:0 5px; border-radius:4px; border:1px solid var(--sev-serious); color:var(--sev-serious); margin-left:6px; vertical-align:1px; }
+.prelim-note{ color:var(--sev-serious); }
 .acc-line .x{ flex:none; color:var(--text-muted); font-size:11px; }
 .acc-line.l2{ font-size:12px; color:var(--text-muted); margin-top:1px; }
 .empty{ font-size:12.5px; color:var(--text-muted); padding:10px 2px; }
@@ -366,7 +370,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.15</span>
+    <span class="ver mono">v0.16</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -385,7 +389,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 
     <section class="step" id="secList">
       <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub">event dates from 01-Oct-2026 to today</span></h2>
-      <p class="note" style="margin-top:-2px">A fixed start date, not a rolling window or a quarter: the list keeps growing from 01-Oct-2026. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens.</p>
+      <p class="note" style="margin-top:-2px">A fixed start date, not a rolling window or a quarter: the list keeps growing from 01-Oct-2026. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens; until then, accidents from the FAA's next-day notices show with a <span class="pl" style="margin-left:0">PRELIM</span> badge.</p>
       <p class="status" id="status">Loading…</p>
       <div class="ctls">
         <div class="seg" id="sevSeg" role="group" aria-label="Severity">
@@ -400,6 +404,21 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <div id="famPanel" hidden></div>
       <div class="list" id="list"></div>
       <div class="more" id="moreWrap" hidden><button class="btn sm" id="moreBtn" type="button">Show more</button></div>
+      <details id="plAdd" hidden style="margin-top:10px">
+        <summary class="note" style="cursor:pointer">Add a prelim entry (app owner only)</summary>
+        <p class="note">For an accident that's in the news or on ASN but not yet in the FAA's notices or NTSB's data. It shows with a PRELIM badge, a fatal one pings at the next hourly check, and it drops out when NTSB lists a case for the same N-number within 3 days of this date.</p>
+        <div class="ctls">
+          <input type="text" class="mono" id="plReg" placeholder="N-number" style="width:110px" aria-label="N-number">
+          <input type="date" id="plDate" aria-label="Event date">
+          <input type="text" id="plMake" placeholder="Make (e.g. Cirrus)" style="width:140px" aria-label="Make">
+          <input type="text" id="plModel" placeholder="Model (e.g. SR22T)" style="width:130px" aria-label="Model">
+          <input type="text" id="plCity" placeholder="City" style="width:130px" aria-label="City">
+          <select id="plSt" aria-label="State"></select>
+          <label class="ck"><input type="checkbox" id="plFatal"> Fatal</label>
+          <input type="url" id="plUrl" placeholder="Source link (https://…)" style="flex:1 1 220px" aria-label="Source link">
+          <button class="btn sm primary" id="plSave" type="button">Add</button>
+        </div>
+      </details>
     </section>
 
     <section class="step" id="secWatch">
@@ -471,9 +490,10 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
     <section class="step" id="secHow">
       <h2><span class="num">4</span> How this works</h2>
       <p class="note"><b>Source.</b> The NTSB Public API (developer.ntsb.gov), the same database behind NTSB CAROL. A server check runs every hour and keeps US piston fixed-wing cases with an event date from 01-Oct-2026 on. "Piston" means NTSB lists an airplane with a reciprocating engine. New NTSB records often have no engine or category yet; those count as piston unless the make or model is a known turbine, jet or helicopter (Boeing, Robinson, Caravan, King Air and the like), so the odd turbine can slip in until NTSB fills in the engine.</p>
-      <p class="note"><b>Timing.</b> NTSB usually lists a case several days after the accident. For example, an SR22T accident on 21-Nov-2026 (N462DL, listed elsewhere) wasn't in NTSB's data yet on 25-Nov-2026. Faster sources (the FAA's next-day notices) are on the to-do list.</p>
+      <p class="note"><b>Timing.</b> NTSB usually lists a case several days after the accident. For example, an SR22T accident on 21-Nov-2026 (N462DL) wasn't in NTSB's data yet on 25-Nov-2026, but the FAA's preliminary notice for it was entered on 23-Nov-2026.</p>
+      <p class="note"><b>Prelim entries.</b> The same hourly check reads the FAA's <a href="https://www.faa.gov/data_research/accident_incident/preliminary_data" target="_blank" rel="noopener">Preliminary Accident and Incident Notices</a> (notices entered in the last 10 business days, usually a day or two after the event) and keeps US accidents that look like piston airplanes (incidents left out). Until NTSB lists a case for the same N-number within 3 days of the event date, the accident shows with a <span class="pl" style="margin-left:0">PRELIM</span> badge; then the NTSB case replaces it. The FAA notice gives the N-number, make and model, place, date and whether it was fatal, but not the number killed, injuries or damage, and the FAA says it is preliminary and subject to change. Prelim entries are left out of the key stats and the trend. A fatal prelim entry sends the fatal ping; the NTSB case for it then doesn't ping again as new.</p>
       <p class="note"><b>What a ping means.</b> A new-accident ping comes when NTSB first lists the case, usually a few days after the event. NTSB's first details are preliminary and can change. Watching needs no profile; a watch ping (with a profile) comes when a watched case's status, report date, probable cause, injury counts or closure changes, or when a watched N-number gets a new case.</p>
-      <p class="note"><b>Not yet included.</b> The FAA's next-day preliminary notices (faster than NTSB, but only kept for 10 business days) and Mexico and Canada.</p>
+      <p class="note"><b>Not yet included.</b> Mexico and Canada.</p>
       <p class="note"><b>Privacy.</b> Your profile holds your settings, watch list, and optional email address. Anyone who has the profile code can see and change that profile, so keep it to yourself.</p>
     </section>
   </div>
@@ -514,7 +534,7 @@ const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 
 // Filters and the Short/Full choice are remembered on this device (v0.2); the search box is not.
 const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters2') || '{}'); } catch (e) { return {}; } })();
-const st = { cases: [], sev: saved0.sev || 'fatal',   // v0.13: Fatal by default (Wayne, 25-Nov-2026)
+const st = { cases: [], prelims: [], sev: saved0.sev || 'fatal',   // v0.13: Fatal by default (Wayne, 25-Nov-2026)
   fams: Array.isArray(saved0.fams) ? saved0.fams : [], state: saved0.state || '',
   view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
   q: '', shown: 20, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
@@ -524,13 +544,16 @@ const famOf = c => c.fam || OTHER;
 let P = null;   // alert profile
 
 // ------------------------------------------------------------ feed
-async function loadFeed() {
+async function loadFeed(bust) {
   try {
-    const r = await fetch(API + '?op=feed');
+    const r = await fetch(API + '?op=feed' + (bust ? '&t=' + Date.now() : ''));
     const d = await r.json();
     st.cases = d.cases || [];
+    // v0.16: prelim entries shaped like cases for the list (ntsb = the entry's id); kept out of st.cases, so the
+    // key stats and trend stay NTSB-only
+    st.prelims = (d.prelims || []).map(p => ({ ...p, ntsb: p.id, fatal: p.fatal ? 1 : 0, prelimFatal: !!p.fatal }));
     const s = d.status;
-    let line = st.cases.length.toLocaleString() + ' accidents';
+    let line = st.cases.length.toLocaleString() + (st.cases.length === 1 ? ' accident' : ' accidents') + (st.prelims.length ? ` + ${st.prelims.length} prelim` : '');
     if (d.asOf) line += ` · NTSB checked ${dmyT(d.asOf)}`;
     if (s && !s.ok && s.error) line += ` · <span class="bad">last check had a problem: ${esc(s.error)}</span>`;
     if (!d.asOf && !st.cases.length) line = 'No accidents gathered yet: the first server check hasn\'t run.';
@@ -601,17 +624,20 @@ function fillSelects() {
   famSummary(); syncSegs();
   $('rFamAdd').innerHTML = '<option value="">+ type (any if none)</option>' + FAMS.map(f => `<option>${esc(f)}</option>`).join('');
   $('rStAdd').innerHTML = '<option value="">+ state (any if none)</option>' + STATES.map(s => `<option>${s}</option>`).join('');
+  if (!$('plSt').options.length) $('plSt').innerHTML = '<option value="">State</option>' + STATES.map(s => `<option>${s}</option>`).join('');
 }
 
 const watching = c => WL.some(w => (w.kind === 'case' && w.id === c.ntsb) || (w.kind === 'tail' && w.tail === c.reg));
 
 function render() {
   const q = st.q.trim().toUpperCase();
-  const list = st.cases.filter(c =>
+  const all = st.prelims.length ? st.cases.concat(st.prelims).sort((a, b) => b.date.localeCompare(a.date)) : st.cases;
+  const list = all.filter(c =>
     (st.sev === 'all' || (st.sev === 'fatal' ? c.fatal > 0 : (c.fatal > 0 || c.serious > 0))) &&
     (!st.fams.length || st.fams.includes(famOf(c))) && (!st.state || c.st === st.state) &&
     (!q || [c.reg, c.city, c.make, c.model, c.ntsb, c.fam].join(' ').toUpperCase().includes(q)));
   const rows = list.slice(0, st.shown).map(c => {
+    if (c.prelim) return prelimRow(c);
     const sev = sevOf(c);
     const loc = [c.city, c.st].filter(Boolean).join(', ');
     const meta = [c.fam && c.fam !== c.model ? c.fam : '', c.yb ? 'built ' + c.yb : '', c.damage ? c.damage.toLowerCase() + ' damage' : '', c.phase, c.def].filter(Boolean).join(' · ');
@@ -637,6 +663,31 @@ function render() {
   });
   $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
   $('moreWrap').hidden = list.length <= st.shown;
+}
+
+// v0.16 prelim rows: FAA preliminary notice (or manual entry), not in NTSB's data yet
+const plInj = c => c.prelimFatal ? 'Fatal (number not yet stated)' : 'Injuries not yet stated';
+function prelimRow(c) {
+  const sev = c.prelimFatal ? 'fatal' : 'none';
+  const loc = [c.city, c.st].filter(Boolean).join(', ');
+  const tw = WL.some(w => w.kind === 'tail' && w.tail === c.reg);
+  const src = c.src === 'FAA' ? `FAA preliminary notice${c.entered ? ', entered ' + dmy(c.entered) : ''}` : `Added by hand${c.entered ? ' ' + dmy(c.entered) : ''}`;
+  if (!st.open.has(c.ntsb)) {
+    return `<div class="acc short prelim ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}" data-open="${esc(c.ntsb)}" title="Tap to open">
+      <div class="acc-line"><span class="d">${dmy(c.date)}</span><span class="r">${esc(c.reg)}</span><span class="t">${esc(c.make)} ${esc(c.model)}<span class="pl">PRELIM</span></span>${tw ? '<span class="w">★</span>' : ''}<span class="x">▾</span></div>
+      <div class="acc-line l2"><span class="t"><span class="inj ${sev}">${plInj(c)}</span>${loc ? ' · ' + esc(loc) : ''} · ${c.src === 'FAA' ? 'FAA notice' : 'added by hand'}</span></div></div>`;
+  }
+  const links = [
+    c.srcUrl ? `<a href="${esc(c.srcUrl)}" target="_blank" rel="noopener">${c.src === 'FAA' ? 'FAA notices' : 'Source'}</a>` : '',
+    c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
+    c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
+  ].filter(Boolean).join('');
+  return `<div class="acc prelim ${sev}${c.ntsb === st.focus ? ' hl' : ''}" id="c-${esc(c.ntsb)}">
+    <div class="acc-top"><span class="acc-ac">${esc(c.make)} ${esc(c.model)}<span class="reg">${esc(c.reg)}</span><span class="pl">PRELIM</span></span><span class="acc-date">${dmy(c.date)}</span></div>
+    <div class="acc-mid"><span class="inj ${sev}">${plInj(c)}</span>${loc ? ' · ' + esc(loc) : ''}</div>
+    <div class="acc-meta"><span class="prelim-note">${src}. NTSB hasn't listed this accident yet; preliminary and subject to change.</span>${c.fam && c.fam !== c.model ? '<br>' + esc(c.fam) : ''}</div>
+    <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button>${P && P.owner ? `<button class="watch-btn" type="button" data-pldel="${esc(c.ntsb)}">Remove entry</button>` : ''}<button class="watch-btn" type="button" data-wtail="${esc(c.reg)}" aria-pressed="${tw}">${tw ? '★ Watching ' + esc(c.reg) : '☆ Watch ' + esc(c.reg)}</button></div>
+  </div>`;
 }
 
 $('sevSeg').addEventListener('click', e => {
@@ -701,6 +752,17 @@ $('list').addEventListener('click', async e => {
   if (cl) { if (st.view === 'short') st.open.delete(cl.dataset.close); else st.open.add('-' + cl.dataset.close); render(); return; }
   if (!e.target.closest('a, button')) { const o = e.target.closest('[data-open]'); if (o) { if (st.view === 'short') st.open.add(o.dataset.open); else st.open.delete('-' + o.dataset.open); render(); return; } }
   const b = e.target.closest('.watch-btn'); if (!b) return;
+  if (b.dataset.pldel) {
+    if (!P || !P.owner || !confirm('Remove this prelim entry?')) return;
+    const r = await fetch(API + '?op=prelim-del&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.dataset.pldel }) });
+    if (r.ok) loadFeed(true); else alert('Not removed: ' + ((await r.json().catch(() => ({}))).error || r.status));
+    return;
+  }
+  if (b.dataset.wtail) {   // prelim rows watch the N-number (there's no NTSB case yet)
+    const t = b.dataset.wtail, k = WL.findIndex(w => w.kind === 'tail' && w.tail === t);
+    if (k >= 0) WL.splice(k, 1); else WL.push({ kind: 'tail', id: t, tail: t, added: new Date().toISOString() });
+    watchesChanged(); return;
+  }
   const id = b.dataset.case, tail = b.dataset.tail;
   const i = WL.findIndex(w => w.kind === 'case' && w.id === id);
   if (i >= 0) WL.splice(i, 1); else WL.push({ kind: 'case', id, tail, added: new Date().toISOString() });
@@ -717,9 +779,11 @@ function flash(t, bad) { const m = $('msg'); m.textContent = t; m.className = 'm
 
 function showProfile() {
   $('noProfile').hidden = !!P; $('hasProfile').hidden = !P;
+  if (!P) $('plAdd').hidden = true;
   drawWatches();
   if (!P) return;
   $('codeOut').textContent = P.code;
+  $('plAdd').hidden = !P.owner;
   $('emailNote').textContent = P.emailReady ? 'Pings arrive as plain emails. Tick Email, enter your address and Save; we email you a link to confirm it, and every ping has a one-click stop link.' : 'Email sending is still being set up on the server: your address is saved, and pings start once it is ready.';
   $('rFatal').checked = P.rules.fatal !== false; $('rNew').checked = !!P.rules.newOn;
   [...$('rSev').querySelectorAll('input')].forEach(i => { i.checked = P.rules.sev.includes(i.value); });
@@ -880,6 +944,21 @@ $('useCode').onclick = async () => {
 };
 $('forget').onclick = e => { e.preventDefault(); P = null; LS.set('tpga-code', null); showProfile(); render(); };
 $('save').onclick = () => saveProfile();
+$('plSave').onclick = async () => {
+  const body = { reg: tailKey($('plReg').value), date: $('plDate').value, make: $('plMake').value, model: $('plModel').value,
+    city: $('plCity').value, st: $('plSt').value, fatal: $('plFatal').checked, url: $('plUrl').value.trim() };
+  if (!okTail(body.reg)) { alert('That isn\'t a US N-number.'); return; }
+  if (!body.date || !body.st || !body.make) { alert('N-number, date, make and state are needed.'); return; }
+  $('plSave').disabled = true;
+  try {
+    const r = await fetch(API + '?op=prelim-add&code=' + encodeURIComponent(P.code), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || r.status);
+    ['plReg', 'plDate', 'plMake', 'plModel', 'plCity', 'plUrl'].forEach(i => { $(i).value = ''; }); $('plFatal').checked = false;
+    await loadFeed(true);
+  } catch (e) { alert('Not added: ' + e.message); }
+  $('plSave').disabled = false;
+};
 $('test').onclick = async () => {
   $('test').disabled = true;
   await saveProfile(null, true);   // v0.10: save what's on screen first, so the test goes to the address shown

@@ -66,3 +66,24 @@ of a year's fatal accidents falling between those dates. Differences smaller tha
 - Public version: alert profiles are keyed by a code only (like Day's Flight Schedule's sync code).
   A public tool should add a sign-in and a real email sender.
 - Mexico and Canada: later.
+
+## Prelim entries (v0.16, 25-Nov-2026)
+
+- **FAA preliminary notices.** The hourly check also reads the CSV export of the FAA's Preliminary Accident and Incident
+  Notices dashboard (`netlify/lib/faa-prelim.mjs`; https://explore.dot.gov/t/FAA/views/PrelimininaryAccidentandIncidentReportData/DetailedNotices.csv,
+  no sign-in, checked 25-Nov-2026). It covers notices entered in the last 10 business days. The export copies the
+  dashboard layout: one notice is ~7 lines joined by `UniqueID`. If the header changes, the check records
+  "FAA notices: … layout changed" in its status and carries on.
+- Kept: US (state given), event type ACCIDENT, event date from 01-Oct-2026, and piston airplanes by the same test as
+  NTSB cases (`isPiston`) plus an FAA make deny list (`FAA_NOT_PISTON`: helicopters, balloons, drones, HondaJet…).
+- Stored in Blobs `cases.prelims` keyed `P-<N-number>-<event date>`. Dropped when NTSB lists a case with the same
+  N-number and an event date within 3 days, or after 120 days.
+- The page shows them with a PRELIM badge; they are left out of the key stats and trend. No automatic watch
+  (Wayne, 25-Nov-2026); a prelim row offers "Watch <N-number>".
+- Pings: a fatal prelim entry sends the fatal ping (and matches "other new accidents" rules as Fatal); its NTSB case then
+  doesn't ping again as new. The first FAA read was quiet, so the notices already listed then didn't ping; their NTSB
+  cases ping as usual.
+- **Manual entries** (owner only): section 1, "Add a prelim entry". Owner = profile whose code's SHA-256 is in
+  `OWNER_HASHES` in `api.mjs` (Wayne's profile). Ops `prelim-add`, `prelim-del`.
+- Also fixed in v0.16: a new NTSB case returned by both the event-date and modified-date queries counted (and
+  pinged) twice.
