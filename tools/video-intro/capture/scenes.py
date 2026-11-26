@@ -19,6 +19,13 @@ def scroll_top(pg, sel, off=12): pg.evaluate(f"window.scrollTo(0, document.query
 def textbox(pg, sel):
     return pg.evaluate("s => { const r = document.createRange(); r.selectNodeContents(document.querySelector(s)); const b = r.getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; }", sel)
 
+def b02a(pg):   # v2 opening: the real list, gently scrolling, no pointer (until the flow chart takes over)
+    from art_scenes import B02_SPLIT
+    pg.goto(rig.APP); rig.ready(pg); pg.click('#sevSeg button[data-v="all"]'); pg.wait_for_timeout(300); scroll_top(pg, '#kstats', 16)
+    f = Film(pg, str(OUT / 'b02a.mp4')); f.hide_cursor()
+    f.until(0.6); f.scroll_to(f.top_of('#secList') + 120, B02_SPLIT - 1.2)
+    f.close(B02_SPLIT)
+
 def b05(pg):
     pg.goto(rig.APP); rig.ready(pg)
     f = Film(pg, str(OUT / 'b05.mp4')); f.cx, f.cy = 700, 330

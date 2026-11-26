@@ -8,11 +8,14 @@ F = pathlib.Path('/tmp/fonts')
 CSS = ''.join(f"@font-face{{font-family:'IBM Plex Sans';font-weight:{w};src:url(file://{F}/fontsource-ibm-plex-sans-5.3.0/files/ibm-plex-sans-latin-{w}-normal.woff2)}}" for w in (300, 400, 500, 600))
 CSS += ''.join(f"@font-face{{font-family:'IBM Plex Mono';font-weight:{w};src:url(file://{F}/fontsource-ibm-plex-mono-5.3.0/files/ibm-plex-mono-latin-{w}-normal.woff2)}}" for w in (500, 600))
 FPS = 30
+B02_SPLIT = round(cue(2, 'tracking aviation') - 0.2, 2)   # app list before, flow chart after
 def plan():
     return {
-        's01':   ('title', 5.5, {}),
-        'b02':   ('CtoA', end(2), {'x': cue(2, 'to avoid it') + 0.4}),
-        'b03':   ('A', end(3), {'f0': end(2) - cue(2, 'to avoid it') - 0.4}),
+        's01':   ('title2', 3.5, {}),
+        # beat 2 (v2): the app list (scenes.b02a, until B02_SPLIT), then the learning-loop flow chart
+        'b02f':  ('flow', end(2) - B02_SPLIT, {'tn': [x - B02_SPLIT for x in (B02_SPLIT + 0.3, cue(2, "It's how") , cue(2, 'learn from'), cue(2, 'to avoid') - 0.3, cue(2, 'happening to us'))]}),
+        # beat 3 (v2): video channels, forums, social groups as named, then all three, greying on "passive"
+        'b03':   ('src', end(3), {'cuts': [cue(3, 'COPA') - 0.1, cue(3, 'Facebook groups') + 0.5, cue(3, 'forums') - 0.1, cue(3, 'That works'), cue(3, 'passive'), cue(3, 'we catch')]}),
         'b04':   ('B', end(4), {'tn': cue(4, 'to be pinged')}),
         'b06':   ('link', end(6) + 1.5, {}),
         'b15':   ('D', end(15), {'ts': [cue(15, 'A new fatal'), cue(15, 'A new case'), cue(15, 'And when a case')]}),

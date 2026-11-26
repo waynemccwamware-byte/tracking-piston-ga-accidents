@@ -5,12 +5,12 @@ https://geezer-geek-pilot-control-panel.netlify.app/
 
 Chapters
 0:00 Passive vs. active
-0:44 The app
-1:06 Key stats
-1:20 Recent accidents and PRELIM entries
-2:00 Set up your alerts
-2:37 What the pings look like
-3:10 Wrap-up
+0:42 The app
+1:04 Key stats
+1:18 Recent accidents and PRELIM entries
+1:58 Set up your alerts
+2:35 What the pings look like
+3:08 Wrap-up
 
 Accident data: NTSB (Public API) and the FAA's Preliminary Accident and Incident Notices. Preliminary information is subject to change; NTSB's final report is the record. The accident list shown was captured 26-Nov-2026; the email addresses and the inbox shown are demo stand-ins, and the phone graphics use made-up, masked tail numbers.
 

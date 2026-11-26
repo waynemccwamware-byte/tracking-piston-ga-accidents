@@ -10,7 +10,8 @@ W.mkdir(parents=True, exist_ok=True)
 MUSIC = pathlib.Path('/home/claude/claude-foreflight-primer/tools/music/audionautix-acoustic-guitar-1.mp3')
 ORDER = ['s01', 'b02', 'b03', 'b04', 'b05', 'b06', 'b07', 'b08', 'b09', 'b10', 'b11', 'b12', 'b13', 'b14', 'b15', 'b16', 'b17', 'end']
 ART_SEGS = {'s01', 'b02', 'b03', 'b04', 'b06', 'b15', 'b17', 'end'}
-FADES = {'s01': (0.8, 0.35), 'b02': (0.35, 0), 'b03': (0, 0.35), 'b04': (0.35, 0.35), 'b06': (0.35, 0.35), 'b15': (0.35, 0.35), 'b17': (0.35, 0), 'end': (0, 1.2)}
+FADES = {'s01': (0.8, 0.35), 'b03': (0.35, 0.35),   # b02 = app clip + flow chart, joined with its own fades (v2)
+          'b04': (0.35, 0.35), 'b06': (0.35, 0.35), 'b15': (0.35, 0.35), 'b17': (0.35, 0), 'end': (0, 1.2)}
 SR = 48000
 def run(*a): subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', *a], check=True)
 def length(f): return float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(f)], capture_output=True, text=True).stdout)
