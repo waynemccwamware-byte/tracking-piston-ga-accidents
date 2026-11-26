@@ -87,7 +87,7 @@ export default async (req, context) => {
         .sort((a, b) => b.date.localeCompare(a.date) || b.ntsb.localeCompare(a.ntsb));
       const prelims = Object.values((state && state.prelims) || {}).map(({ notified, firstSeen, quietSeed, ...p }) => p)
         .sort((a, b) => b.date.localeCompare(a.date));
-      return json(200, { since: sinceNow(), coveredFrom: (state && state.coveredFrom) || null, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
+      return json(200, { since: sinceNow(), coveredFrom: state ? (state.coveredFrom || ((state.backfillTo || state.backfillDone) ? '2026-10-01' : null)) : null, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
         { 'Cache-Control': 'public, max-age=60' });
     }
 

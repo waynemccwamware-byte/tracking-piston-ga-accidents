@@ -392,7 +392,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.24</span>
+    <span class="ver mono">v0.25</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -660,7 +660,7 @@ function drawStats() {
   // still filling in earlier months (the v0.24 gap fill): no trend until the year's list is complete
   const filling = fillingYear(y);
   let foot = 'NTSB accidents only (incidents left out), by event date, whatever the filters below are set to. NTSB lists cases days after they happen, and injury counts can be blank at first, so recent numbers run low.';
-  if (filling) foot += ` Still filling in accidents before ${dmy(d.coveredFrom)} (a month an hour), so these numbers will rise; the trend and chart show once it's done.`;
+  if (filling) foot += ` Still filling in accidents before ${dmy(d.coveredFrom)} (a month an hour), so these numbers will rise; the trend shows once it's done.`;
   $('ksFoot').textContent = foot;
   $('kstats').hidden = false;
   loadTrend().then(() => {
@@ -713,9 +713,10 @@ function trendFor(kind, y) {
 // Year-to-date chart (inline SVG, no library): this year's running count (GA Accident Stats types) against the
 // trend's expected running count, with a shaded band of normal variation (expected ± 2√expected). The solid line
 // stops LAG days back; a dotted line carries it on to today, where NTSB is still listing cases.
+const SHOW_CHART = false;   // v0.25: chart off while it's reworked (Wayne, 26-Nov-2026)
 function drawChart() {
   const y = st.year;
-  if (!TREND || fillingYear(y)) { $('ychart').hidden = true; return; }
+  if (!SHOW_CHART || !TREND || fillingYear(y)) { $('ychart').hidden = true; return; }
   const kind = st.chart, w = yearWin(y), m = trendModel(kind);
   if (!m) { $('ychart').hidden = true; return; }
   const F = famsLike();
