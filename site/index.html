@@ -150,7 +150,7 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .ks-chart svg text{ font:9px 'IBM Plex Mono',monospace; fill:var(--text-muted); }
 .kc-leg{ font-size:10.5px; color:var(--text-muted); line-height:1.35; }
 .kc-wait{ font-size:11px; color:var(--text-muted); }
-/* v0.35: the counting notes start closed on every device (Wayne, 26-Nov-2026) */
+/* v0.35–v0.36: the key stats' and section 1's notes start closed on every device (Wayne, 26-Nov-2026) */
 .ks-more{ margin-top:6px; }
 .ks-more summary{ font-size:11.5px; color:var(--text-muted); cursor:pointer; list-style:none; display:inline-flex; align-items:center; gap:5px; }
 .ks-more summary::-webkit-details-marker{ display:none; }
@@ -399,7 +399,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.35</span>
+    <span class="ver mono">v0.36</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -432,7 +432,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 
     <section class="step" id="secList">
       <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub"></span></h2>
-      <p class="note" style="margin-top:-2px">Calendar years: the list keeps this year and last (never before 01-Jan-2026), and each 01-Jan the oldest year drops off. Pick the year above the key stats. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens; until then, accidents from the FAA's next-day notices show with a <span class="pl" style="margin-left:0">PRELIM</span> badge.</p>
+      <details class="ks-more" style="margin:-2px 0 8px"><summary>About this list</summary><p class="note" style="margin:6px 0 0">Calendar years: the list keeps this year and last (never before 01-Jan-2026), and each 01-Jan the oldest year drops off. Pick the year above the key stats. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens; until then, accidents from the FAA's next-day notices show with a <span class="pl" style="margin-left:0">PRELIM</span> badge.</p></details>
       <p class="status" id="status">Loading…</p>
       <div class="ctls">
         <div class="seg" id="sevSeg" role="group" aria-label="Severity">
