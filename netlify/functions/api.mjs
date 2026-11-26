@@ -111,7 +111,7 @@ export default async (req, context) => {
     if (op === 'refresh' && req.method === 'POST') {
       const st = await B.get('status');
       if (st && Date.now() - Date.parse(st.lastRun) < 10 * 60e3) return json(429, { error: 'Checked less than 10 minutes ago', status: st });
-      return json(200, { status: await runPoll(context) });
+      return json(200, { status: await runPoll(context, { gapBudgetMs: 3000 }) });   // page calls get ~10 s
     }
 
     if (op === 'profile-new' && req.method === 'POST') {

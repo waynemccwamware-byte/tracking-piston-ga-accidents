@@ -63,7 +63,7 @@ const describeChange = (o, c) => {
   return bits;
 };
 
-export async function runPoll(context, { silent = false } = {}) {
+export async function runPoll(context, { silent = false, gapBudgetMs = 15000 } = {}) {
   const B = blobs(context);
   const started = new Date().toISOString();
   const status = { lastRun: started, ok: false, error: '', counts: {}, note: '' };
@@ -114,11 +114,15 @@ export async function runPoll(context, { silent = false } = {}) {
       if (to >= recentFrom) state.backfillDone = true;
       status.counts.backfill = `${from} to ${to}`;
     } else if (state.coveredFrom > SINCE) {
-      // v0.24 gap fill, backwards: the 30 days before coveredFrom (not before the start gate), quiet
-      const to = day(state.coveredFrom, -1), from = [day(state.coveredFrom, -30), SINCE].sort()[1];
-      take(await casesByEventDate(from, to), true);
-      state.coveredFrom = from;
-      status.counts.gapFill = `${from} to ${to}`;
+      // v0.24 gap fill, backwards, quiet: 30 days at a time before coveredFrom (not before the start gate).
+      // v0.26: as many 30-day pieces as fit in ~15 s of the run (a scheduled run gets 30 s), not one an hour.
+      const t0 = Date.now(), top = state.coveredFrom;
+      while (state.coveredFrom > SINCE && Date.now() - t0 < gapBudgetMs) {
+        const to = day(state.coveredFrom, -1), from = [day(state.coveredFrom, -30), SINCE].sort()[1];
+        take(await casesByEventDate(from, to), true);
+        state.coveredFrom = from;
+      }
+      status.counts.gapFill = `${state.coveredFrom} to ${day(top, -1)}`;
     }
   } catch (e) { errs.push('backfill: ' + e.message); }
   const quiet = backfilling;
@@ -271,7 +275,7 @@ export async function runPoll(context, { silent = false } = {}) {
   status.ok = !status.error;
   status.counts = { ...status.counts, cases: Object.keys(now).length, prelims: Object.keys(prelims).length, fresh: fresh.length, changed: changed.length, profiles: profiles.length, pings: sent };
   status.note = seeding ? `Filling the list from ${fmtDate(SINCE)} (through ${fmtDate(state.backfillTo)}); pings start when it's done.`
-    : state.coveredFrom > SINCE ? `Filling in earlier accidents: complete back to ${fmtDate(state.coveredFrom)}, going back to ${fmtDate(SINCE)} a month an hour.` : '';
+    : state.coveredFrom > SINCE ? `Filling in earlier accidents: complete back to ${fmtDate(state.coveredFrom)}, going back to ${fmtDate(SINCE)} at the next hourly check.` : '';
   await B.set('status', status);
   return status;
 }
