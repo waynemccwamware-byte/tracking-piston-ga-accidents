@@ -370,7 +370,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.19</span>
+    <span class="ver mono">v0.20</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -526,6 +526,10 @@ const sevOf = c => c.fatal ? 'fatal' : c.serious ? 'serious' : c.minor ? 'minor'
 const injText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : c.highest ? 'No injuries' : 'Injuries not yet stated by NTSB';
 const pdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
 const reg = t => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${encodeURIComponent(t)}`;
+const caseUrl = c => `https://web.ntsb.gov/investigations/?ntsbnumber=${encodeURIComponent(c.ntsb)}`;
+// newest NTSB report, once there is one past the initial notice: final when the case is completed, else by publish profile
+const reportLabel = c => !c.mkey ? '' : (c.status === 'Completed' || /final/i.test(c.profile || '')) ? 'NTSB final report (PDF)'
+  : /factual/i.test(c.profile || '') ? 'NTSB factual report (PDF)' : /prelim/i.test(c.profile || '') ? 'NTSB preliminary report (PDF)' : '';
 const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
              set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
 
@@ -634,8 +638,12 @@ function render() {
     const loc = [c.city, c.st].filter(Boolean).join(', ');
     const meta = [c.fam && c.fam !== c.model ? c.fam : '', c.yb ? 'built ' + c.yb : '', c.damage ? c.damage.toLowerCase() + ' damage' : '', c.phase, c.def].filter(Boolean).join(' · ');
     const statusTxt = c.status ? `NTSB ${esc(c.ntsb)} · ${esc(c.status)}${c.reportDate ? ' · report ' + dmy(c.reportDate) : ''}` : `NTSB ${esc(c.ntsb)}`;
+    // v0.20: NTSB first (Wayne, 26-Nov-2026). NTSB's own case page has the narrative, status, report and docket for
+    // every case; its "View Report" is the same GenerateNewestReport PDF (checked on CEN27LA008 and CEN27LA050, 26-Nov-2026).
     const links = [
-      c.status === 'Completed' && pdf(c) ? `<a href="${pdf(c)}" target="_blank" rel="noopener">NTSB report (PDF)</a>` : '',
+      c.ntsb ? `<a href="${caseUrl(c)}" target="_blank" rel="noopener">NTSB case page</a>` : '',
+      reportLabel(c) ? `<a href="${pdf(c)}" target="_blank" rel="noopener">${reportLabel(c)}</a>` : '',
+      c.docket && c.mkey ? `<a href="https://data.ntsb.gov/Docket?ProjectID=${c.mkey}" target="_blank" rel="noopener">NTSB docket</a>` : '',
       c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
       c.reg ? `<a href="${STATS}?tail=${encodeURIComponent(c.reg)}" target="_blank" rel="noopener">${esc(c.reg)} in GA Accident Stats</a>` : '',
     ].filter(Boolean).join('');
