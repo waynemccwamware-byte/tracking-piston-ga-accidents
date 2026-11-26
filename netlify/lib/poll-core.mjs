@@ -63,7 +63,7 @@ const describeChange = (o, c) => {
   return bits;
 };
 
-export async function runPoll(context, { silent = false, gapBudgetMs = 15000 } = {}) {
+export async function runPoll(context, { silent = false, gapBudgetMs = 10000 } = {}) {
   const B = blobs(context);
   const started = new Date().toISOString();
   const status = { lastRun: started, ok: false, error: '', counts: {}, note: '' };
@@ -115,7 +115,7 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 15000 } =
       status.counts.backfill = `${from} to ${to}`;
     } else if (state.coveredFrom > SINCE) {
       // v0.24 gap fill, backwards, quiet: 30 days at a time before coveredFrom (not before the start gate).
-      // v0.26: as many 30-day pieces as fit in ~15 s of the run (a scheduled run gets 30 s), not one an hour.
+      // v0.26: as many 30-day pieces as fit in ~10 s of the run (a scheduled run gets 30 s), not one an hour.
       const t0 = Date.now(), top = state.coveredFrom;
       while (state.coveredFrom > SINCE && Date.now() - t0 < gapBudgetMs) {
         const to = day(state.coveredFrom, -1), from = [day(state.coveredFrom, -30), SINCE].sort()[1];
@@ -144,8 +144,14 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 15000 } =
       kept++;
     }
     state.prelimSeeded = true;
+    state.faaFailSince = null;
     status.counts.faa = `${ns.length} notices, ${kept} piston accidents`;
-  } catch (e) { errs.push('FAA notices: ' + e.message); }
+  } catch (e) {
+    // v0.27: FAA refuses now and then; prelim entries already listed are kept. Flag it only after 3 hours of failures.
+    state.faaFailSince = state.faaFailSince || started;
+    status.counts.faa = 'not read this time: ' + e.message;
+    if (Date.parse(started) - Date.parse(state.faaFailSince) >= 3 * 3600e3) errs.push(`FAA notices (failing since ${fmtDate(state.faaFailSince.slice(0, 10))} ${state.faaFailSince.slice(11, 16)} UTC): ${e.message}`);
+  }
   status.error = errs.join('; ');
   // re-apply the piston test to stored cases, so a tightened rule also clears earlier entries
   // and drop cases from before the start gate (each 01-Jan the oldest year goes; watches check NTSB directly, so they keep working)

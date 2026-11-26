@@ -75,13 +75,24 @@ export function noticesFromCsv(text) {
   return out.filter(n => n.reg && n.date);
 }
 
-export async function fetchFaaNotices(ms = 15000) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
-  try {
-    const r = await fetch(FAA_CSV, { headers: { Accept: 'text/csv' }, signal: ctl.signal });
-    if (!r.ok) throw new Error('FAA notices answered ' + r.status);
-    return noticesFromCsv(await r.text());
-  } finally { clearTimeout(t); }
+// v0.27: FAA's server answered 403 on the 13:23 check of 26-Nov-2026 after working all morning. Send an
+// identifying User-Agent (some front ends refuse Node's default) and try once more after a short wait.
+const FAA_HEADERS = { Accept: 'text/csv, text/plain;q=0.9, */*;q=0.5',
+  'User-Agent': 'Mozilla/5.0 (compatible; GeezerGeekPilot-TrackingPistonGA/1.0; +https://tracking-piston-ga-accidents.netlify.app/)' };
+export async function fetchFaaNotices(ms = 8000) {
+  let last;
+  for (let i = 0; i < 2; i++) {
+    if (i) await new Promise(r => setTimeout(r, 2500));
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+    try {
+      const r = await fetch(FAA_CSV, { headers: FAA_HEADERS, signal: ctl.signal });
+      if (r.ok) return noticesFromCsv(await r.text());
+      last = new Error('FAA notices answered ' + r.status);
+      if (r.status < 403 || r.status === 404) break;   // retry only refusals/rate limits/server errors
+    } catch (e) { last = e.name === 'AbortError' ? new Error('FAA notices timed out') : e; }
+    finally { clearTimeout(t); }
+  }
+  throw last;
 }
 
 // FAA lists everything (airliners, helicopters, balloons, drones…). Makes that are never piston airplanes, on top of
