@@ -10,7 +10,9 @@ export default async (req, context) => {
   const B = blobs(context);
   if (B.ok) {
     const [state, status] = await Promise.all([B.get('cases'), B.get('status')]);
-    const filling = !!(state && state.coveredFrom && state.coveredFrom > sinceNow());
+    // a list from before v0.24 has no coveredFrom yet: it's complete only from 01-Oct-2026
+    const cov = state ? (state.coveredFrom || ((state.backfillTo || state.backfillDone) ? '2026-10-01' : '')) : '';
+    const filling = !!(cov && cov > sinceNow());
     const due = !status || !status.lastRun || Date.now() - Date.parse(status.lastRun) >= 55 * 60e3;
     if (!filling && !due) return;
   }
