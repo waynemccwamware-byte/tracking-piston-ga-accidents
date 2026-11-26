@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Inbox mock for the intro video (beats 14 and 16): #confirm or #ping. Email text as the app sends it
+     (api.mjs sendConfirmEmail, common.mjs sendEmail); demo address; the ping's tail and case number are masked. -->
+<style>
+*{ box-sizing:border-box; margin:0; }
+body{ width:960px; height:540px; overflow:hidden; background:#10141a; color:#e7e4dc; font:14px/1.45 'IBM Plex Sans',sans-serif; display:flex; }
+.side{ width:300px; background:#151b23; border-right:1px solid #262e3a; padding:14px 0; flex:none; }
+.side h2{ font-size:13px; font-weight:600; color:#8b93a1; padding:0 18px 10px; letter-spacing:.04em; text-transform:uppercase; }
+.item{ padding:10px 18px; border-bottom:1px solid #1f2630; }
+.item .f{ font-weight:600; font-size:13px; display:flex; } .item .f .w{ margin-left:auto; font-weight:400; color:#8b93a1; font-size:12px; }
+.item .s{ font-size:13px; color:#c3c9d2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.item.on{ background:#24303d; border-left:3px solid #f5a623; padding-left:15px; }
+.item.dim{ opacity:.55; }
+.msg{ flex:1; padding:22px 30px; overflow:hidden; }
+.msg h1{ font-size:19px; font-weight:600; margin-bottom:10px; }
+.hdr{ font-size:13px; color:#aab2be; border-bottom:1px solid #262e3a; padding-bottom:12px; margin-bottom:14px; }
+.hdr b{ color:#e7e4dc; font-weight:500; }
+pre{ font:13.5px/1.55 'IBM Plex Sans',sans-serif; white-space:pre-wrap; }
+a{ color:#f5a623; }
+.foot{ color:#aab2be; }
+</style></head><body>
+<div class="side"><h2>Inbox</h2>
+  <div class="item on" id="i1"><div class="f"><span>Tracking Piston GA Accidents</span><span class="w">now</span></div><div class="s" id="s1"></div></div>
+  <div class="item dim"><div class="f"><span>Flight club</span><span class="w">8:05</span></div><div class="s">Saturday fly-out: lunch at the field</div></div>
+  <div class="item dim"><div class="f"><span>Avionics shop</span><span class="w">Yesterday</span></div><div class="s">Your database update is ready</div></div>
+  <div class="item dim"><div class="f"><span>Hangar neighbor</span><span class="w">Tue</span></div><div class="s">Borrowed your tow bar, back tomorrow</div></div>
+</div>
+<div class="msg">
+  <h1 id="subj"></h1>
+  <div class="hdr">From <b>Tracking Piston GA Accidents</b> &lt;pings@alerts.wamware.com&gt; · To <b>pilot@example.com</b></div>
+  <pre id="body"></pre>
+</div>
+<script>
+const APP = 'https://tracking-piston-ga-accidents.netlify.app/';
+const LINK = APP + '.netlify/functions/api?op=confirm&amp;code=P7KM-4HXR-9WQD&amp;t=k2m8…';
+const M = {
+  confirm: ['Confirm your email for Tracking Piston GA Accidents',
+    `Someone (hopefully you) asked for accident pings from Tracking Piston GA Accidents to go to this address.\n\nConfirm with this link:\n<a id="link" href="#">${LINK}</a>\n\nIf it wasn't you, ignore this email and nothing more will be sent.`],
+  ping: ['FATAL: CESSNA 182 N7••••',
+    `dd-mmm-2026 N7•••• CESSNA 182, (city), (state)\n1 fatal, destroyed damage\nNTSB ERA27FA0••\n\nOpen in the app: ${APP}?case=…\n\n<span class="foot" id="foot">--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change these emails in section 3 of ${APP}\nStop all emails with one click: ${APP}.netlify/functions/api?op=unsub&amp;code=…</span>`],
+};
+const k = location.hash.slice(1) || 'confirm';
+document.getElementById('subj').textContent = M[k][0];
+document.getElementById('s1').textContent = M[k][0];
+document.getElementById('body').innerHTML = M[k][1];
+</script>
+</body></html>

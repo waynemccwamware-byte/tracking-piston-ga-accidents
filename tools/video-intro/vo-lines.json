@@ -1,0 +1,18 @@
+{
+"2": "Fellow pilots, most of us see real value in tracking aviation accidents. It's how we learn from what went wrong, to avoid it happening to us.",
+"3": "We usually do that by following Blancolirio, COPA, Facebook groups and forums. That works, but it's passive: we catch whatever happens to scroll by.",
+"4": "I wanted something active: to be pinged whenever a serious accident happens in a type like the one I fly.",
+"5": "So, with help from my friend Claude, I built an app for exactly that: Tracking Piston GA Accidents.",
+"6": "It's free, on the GeezerGeek Pilot Apps page. The link and a QR code are below.",
+"7": "Up top: US piston airplane accidents since the first of October, fatal accidents, and whether fatals are running better or worse than the ten-year trend.",
+"8": "Section one lists every one, newest first. Tap an accident for NTSB's details: injuries, damage, status, and the probable cause once it's published.",
+"9": "NTSB often takes a week or more to list a case. When the FAA's next-day notice comes out, the accident shows here marked PRELIM, and the NTSB record replaces it later.",
+"10": "You can narrow the list to your type, a whole brand, or all singles or twins.",
+"11": "But the heart of it is section three, Alerts. This is the active part.",
+"12": "Choose what pings you. Every fatal accident is on by default. Add other new accidents that match the severity and the types you care about.",
+"13": "Enter your email, and Save.",
+"14": "Check your inbox for a short email with a confirm link. Click it, and you're set. You can send yourself a test ping to be sure it arrives.",
+"15": "From then on, the news comes to you. A new fatal accident, from the FAA's notice or from NTSB. A new case in a type you fly. And when a case you're watching in section two changes: a preliminary report, a factual report, a probable cause.",
+"16": "Every ping has a one-click stop link, and nothing goes out until you confirm your address.",
+"17": "Learning from accidents is one of the best safety habits we can develop as pilots. This app simply makes it active instead of passive. Fly safe."
+}

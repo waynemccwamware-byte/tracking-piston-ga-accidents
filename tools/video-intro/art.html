@@ -45,6 +45,20 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
 .note.fatal .s{ color:var(--amber); }
 .pulse{ position:absolute; border-radius:40px; border:4px solid rgba(245,166,35,.55); }
 .headset{ position:absolute; left:250px; bottom:100px; width:420px; height:330px; }
+/* cards */
+.card2{ position:absolute; inset:0; }
+.cl{ position:absolute; left:150px; top:250px; width:1000px; }
+.cl h2{ font-weight:600; font-size:76px; line-height:1.08; }
+.cl .tl{ margin-top:18px; font-weight:500; font-size:44px; color:var(--amber); }
+.cl .k{ margin-top:46px; font-size:36px; line-height:1.5; color:var(--text); }
+.cl .k b{ color:var(--amber); font-weight:600; }
+.qr{ position:absolute; right:110px; top:250px; width:600px; text-align:center; }
+.qr img{ width:400px; height:400px; image-rendering:pixelated; border-radius:14px; }
+.qr .a{ margin-top:22px; font-weight:600; font-size:34px; color:var(--amber); }
+.qr .u{ margin-top:6px; font:600 28px/1.35 'IBM Plex Mono',monospace; color:var(--amber); }
+.rows{ margin-top:40px; display:grid; grid-template-columns:260px 1fr; row-gap:16px; font-size:29px; }
+.rows .h{ font:500 25px 'IBM Plex Mono',monospace; color:var(--muted); padding-top:3px; }
+.disc{ margin-top:34px; font-size:26px; color:var(--muted); width:1000px; }
 /* radar (title, C) */
 .radar{ position:absolute; }
 </style></head><body>
@@ -61,8 +75,8 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
   <g fill="none" stroke="#24303a" stroke-width="2"><circle r="120"/><circle r="240"/><circle r="360"/><circle r="480"/>
     <path d="M-490 0H490M0-490V490"/></g>
   <g fill="none" stroke="#2c3a44" stroke-width="2" stroke-dasharray="4 10"><path d="M-346-346L346 346M-346 346L346-346"/></g>
-  <path d="M0 0 L490 0 A490 490 0 0 0 424.4 -245 Z" fill="url(#sweep)" transform="rotate(-38)"/>
-  <line x1="0" y1="0" x2="490" y2="0" stroke="#5fd0c8" stroke-width="4" transform="rotate(-38)" opacity=".9"/>
+  <g class="sw" transform="rotate(-38)"><path d="M0 0 L490 0 A490 490 0 0 0 424.4 -245 Z" fill="url(#sweep)"/>
+  <line x1="0" y1="0" x2="490" y2="0" stroke="#5fd0c8" stroke-width="4" opacity=".9"/></g>
   <g fill="#6b7585">
     <use href="#plane" x="-205" y="-160" width="34" height="34" transform="rotate(40 -188 -143)"/>
     <use href="#plane" x="-330" y="150" width="34" height="34"/>
@@ -71,9 +85,9 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
     <use href="#plane" x="250" y="40" width="30" height="30" transform="rotate(200 265 55)"/>
   </g>
   <g transform="translate(300 -230)">
-    <circle r="62" fill="none" stroke="#f5a623" stroke-width="3" opacity=".35"/>
-    <circle r="40" fill="none" stroke="#f5a623" stroke-width="4" opacity=".7"/>
-    <use href="#plane" x="-20" y="-20" width="40" height="40" fill="#f5a623" transform="rotate(-60)"/>
+    <circle class="ab1" r="62" fill="none" stroke="#f5a623" stroke-width="3" opacity=".35"/>
+    <circle class="ab2" r="40" fill="none" stroke="#f5a623" stroke-width="4" opacity=".7"/>
+    <use class="abp" href="#plane" x="-20" y="-20" width="40" height="40" fill="#f5a623" transform="rotate(-60)"/>
   </g>
 </svg>
 </template>
@@ -129,12 +143,12 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
       <div class="b">FAA preliminary notice; NTSB hasn't listed it yet.</div>
     </div>
     <div class="note">
-      <div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">5h ago</span></div>
+      <div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">now</span></div>
       <div class="s">New accident: Piper PA-28 N3••••</div>
       <div class="b">1 serious, substantial damage. A type you follow.</div>
     </div>
     <div class="note">
-      <div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">2d ago</span></div>
+      <div class="h"><span class="ic"></span><span>Tracking Piston GA Accidents</span><span class="w">now</span></div>
       <div class="s">Watch N2••••: preliminary report posted</div>
       <div class="b">Status and report date updated by NTSB.</div>
     </div>
@@ -146,14 +160,71 @@ html,body{ width:1920px; height:1080px; overflow:hidden; background:radial-gradi
   <div class="tag" style="color:var(--amber)">ACTIVE · pings as things happen</div>
 </div>
 
+<!-- LINK CARD (beat 6) -->
+<div class="scene" id="s-link"><div class="card2">
+  <div class="cl" style="top:350px"><h2>Free, on<br>GeezerGeek Pilot Apps</h2>
+    <div class="k">Open the page, then pick<br><b>Tracking Piston GA Accidents</b><br>under Safety Stats.</div></div>
+  <div class="qr" style="top:300px"><img src="qr-cp.png" alt=""><div class="a">GeezerGeek Pilot Apps</div><div class="u">geezer-geek-pilot-control-panel<br>.netlify.app</div></div>
+</div></div>
+
+<!-- END CARD -->
+<div class="scene" id="s-end"><div class="card2" style="background:rgba(10,13,18,.55)">
+  <div class="cl" style="top:250px"><h2>Tracking Piston<br>GA Accidents</h2>
+    <div class="tl">Accidents to learn from, delivered to your inbox.</div>
+    <div class="rows">
+      <div class="h">Accident data</div><div>NTSB (Public API) · FAA Preliminary Accident and Incident Notices</div>
+      <div class="h">Built with</div><div>my friend Claude</div>
+      <div class="h">Music</div><div>Audionautix · Acoustic Guitar 1 (CC BY 4.0)</div>
+    </div>
+    <div class="disc">For safety awareness and learning. Preliminary information is subject to change; NTSB's final report is the record.</div></div>
+  <div class="qr" style="top:330px"><img src="qr-cp.png" alt=""><div class="a">GeezerGeek Pilot Apps (free)</div><div class="u">geezer-geek-pilot-control-panel<br>.netlify.app</div></div>
+</div></div>
+
 <script>
 const R = document.getElementById('radarT').innerHTML;
 document.querySelectorAll('.rad').forEach(e => { e.innerHTML = R; e.firstElementChild.style.width = '100%'; e.firstElementChild.style.height = '100%'; });
-const kinds = ['post', 'vid', 'fb', 'hot', 'post', 'vid', 'post', 'fb', 'vid'];
+const kinds = ['post', 'vid', 'fb', 'hot', 'post', 'vid', 'post', 'fb', 'vid', 'post', 'vid', 'fb', 'post', 'vid', 'post', 'fb', 'vid', 'post'];   // long enough for ~30 s of scroll
 document.getElementById('feed').innerHTML = kinds.map(k => k === 'vid' || k === 'hot'
   ? `<div class="card${k === 'hot' ? ' hot' : ''}"><div class="thumb"></div><div class="bars"><div class="bar" style="width:90%"></div><div class="bar" style="width:70%"></div><div class="bar" style="width:40%;opacity:.6"></div></div></div>`
   : `<div class="card"><div class="av"></div><div class="bars"><div class="bar" style="width:45%"></div><div class="bar" style="width:95%"></div><div class="bar" style="width:88%"></div>${k === 'fb' ? '<div class="bar" style="width:100%;height:150px;border-radius:12px;opacity:.7"></div>' : '<div class="bar" style="width:60%"></div>'}</div></div>`).join('');
 const show = () => { document.querySelectorAll('.scene').forEach(s => s.style.display = 'none'); const s = document.getElementById('s-' + (location.hash.slice(1) || 'title')); if (s) s.style.display = 'block'; };
 addEventListener('hashchange', show); show();
+
+// ---- frame director for the video: frame(scene, t, o) draws one frame at time t (s) ----
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const ease = x => (x = Math.max(0, Math.min(1, x)), x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const vis = (id, op = 1) => { const e = document.getElementById('s-' + id); e.style.display = op > 0.001 ? 'block' : 'none'; e.style.opacity = op; };
+function radar(t) {   // sweep 80 deg/s; the amber blip (at -37.5 deg) glows as the sweep passes and fades over ~2 s
+  const a = -150 + t * 80;
+  $$('.sw').forEach(g => g.setAttribute('transform', `rotate(${a})`));
+  const since = (((a - -37.5) % 360) + 360) % 360 / 80;      // s since the sweep last passed the blip
+  const g = since < 2.5 ? 1 - since / 2.5 : 0.15;
+  $$('.ab1').forEach(e => { e.setAttribute('opacity', (0.1 + 0.5 * g).toFixed(3)); e.setAttribute('r', (40 + 30 * (1 - g)).toFixed(1)); });
+  $$('.ab2').forEach(e => e.setAttribute('opacity', (0.25 + 0.6 * g).toFixed(3)));
+  $$('.abp').forEach(e => e.setAttribute('fill', g > 0.2 ? '#f5a623' : '#9a7a3a'));
+}
+function feed(t) { document.getElementById('feed').style.transform = `translateX(-50%) rotate(-4deg) translateY(${-60 - t * 42}px)`; }
+function phoneB(t, tn) {   // notification slides in at tn; pulse rings breathe after
+  const n = document.querySelector('#s-B .note'), k = ease((t - tn) / 0.6);
+  n.style.opacity = k; n.style.transform = `translateY(${(1 - k) * -40}px)`;
+  $$('#s-B .pulse').forEach((p, i) => { const ph = ((t - tn - 0.4 - i * 0.6) % 1.8 + 1.8) % 1.8 / 1.8; p.style.opacity = t < tn + 0.4 ? 0 : (1 - ph) * (i ? 0.5 : 0.8); p.style.transform = `scale(${1 + ph * 0.06})`; });
+}
+function phoneD(t, ts) {   // pings drop in at ts[0..2], newest on top
+  const notes = $$('#s-D .stack .note');   // order in the stack: fatal, new accident, watch
+  notes.forEach((n, i) => { const k = ease((t - ts[i]) / 0.55); n.style.opacity = k; n.style.transform = `translateY(${(1 - k) * -30}px)`; n.style.display = t < ts[i] ? 'none' : ''; });
+}
+window.frame = (scene, t, o = {}) => {
+  $$('.scene').forEach(e => { e.style.display = 'none'; e.style.opacity = 1; });
+  radar(t + (o.r0 || 0));
+  if (scene === 'title') { vis('title'); const k = Math.min(1, t / 1.0); document.querySelector('#s-title .t-copy').style.opacity = ease(k); }
+  else if (scene === 'C') vis('C');
+  else if (scene === 'CtoA') { const k = ease((t - o.x) / 1.2); vis('C', 1 - k); vis('A', k); feed(Math.max(0, t - o.x)); }
+  else if (scene === 'A') { vis('A'); feed(t + (o.f0 || 0)); }
+  else if (scene === 'B') { vis('B'); phoneB(t, o.tn); }
+  else if (scene === 'BtoC') { const k = ease((t - o.x) / 1.4); vis('B', 1 - k); vis('C', k); phoneB(t, o.tn); }
+  else if (scene === 'D') { vis('D'); phoneD(t, o.ts); }
+  else if (scene === 'link') vis('link');
+  else if (scene === 'end') vis('end');
+};
 </script>
 </body></html>

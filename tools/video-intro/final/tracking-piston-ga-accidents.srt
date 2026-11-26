@@ -1,0 +1,148 @@
+1
+00:00:06,200 --> 00:00:12,285
+Fellow pilots, most of us see real value in tracking aviation accidents.
+
+2
+00:00:12,335 --> 00:00:18,100
+It's how we learn from what went wrong, to avoid it happening to us.
+
+3
+00:00:19,667 --> 00:00:26,663
+We usually do that by following Blancolirio, COPA, Facebook groups and forums.
+
+4
+00:00:26,713 --> 00:00:29,338
+That works, but it's passive:
+
+5
+00:00:29,388 --> 00:00:32,917
+we catch whatever happens to scroll by.
+
+6
+00:00:34,467 --> 00:00:36,731
+I wanted something active:
+
+7
+00:00:36,781 --> 00:00:43,517
+to be pinged whenever a serious accident happens in a type like the one I fly.
+
+8
+00:00:45,067 --> 00:00:52,017
+So, with help from my friend Claude, I built an app for exactly that:
+
+9
+00:00:52,067 --> 00:00:55,017
+Tracking Piston GA Accidents.
+
+10
+00:00:56,567 --> 00:01:01,088
+It's free, on the GeezerGeek Pilot Apps page.
+
+11
+00:01:01,138 --> 00:01:04,467
+The link and a QR code are below.
+
+12
+00:01:07,533 --> 00:01:08,126
+Up top:
+
+13
+00:01:08,176 --> 00:01:19,883
+US piston airplane accidents since the first of October, fatal accidents, and whether fatals are running better or worse than the ten-year trend.
+
+14
+00:01:21,433 --> 00:01:25,538
+Section one lists every one, newest first.
+
+15
+00:01:25,588 --> 00:01:29,016
+Tap an accident for NTSB's details:
+
+16
+00:01:29,066 --> 00:01:35,783
+injuries, damage, status, and the probable cause once it's published.
+
+17
+00:01:37,333 --> 00:01:41,422
+NTSB often takes a week or more to list a case.
+
+18
+00:01:41,472 --> 00:01:51,783
+When the FAA's next-day notice comes out, the accident shows here marked PRELIM, and the NTSB record replaces it later.
+
+19
+00:01:53,333 --> 00:01:59,283
+You can narrow the list to your type, a whole brand, or all singles or twins.
+
+20
+00:02:00,833 --> 00:02:04,858
+But the heart of it is section three, Alerts.
+
+21
+00:02:04,908 --> 00:02:07,083
+This is the active part.
+
+22
+00:02:08,633 --> 00:02:10,536
+Choose what pings you.
+
+23
+00:02:10,586 --> 00:02:13,847
+Every fatal accident is on by default.
+
+24
+00:02:13,897 --> 00:02:20,483
+Add other new accidents that match the severity and the types you care about.
+
+25
+00:02:22,033 --> 00:02:24,727
+Enter your email, and Save.
+
+26
+00:02:26,700 --> 00:02:30,708
+Check your inbox for a short email with a confirm link.
+
+27
+00:02:30,758 --> 00:02:32,592
+Click it, and you're set.
+
+28
+00:02:32,642 --> 00:02:36,750
+You can send yourself a test ping to be sure it arrives.
+
+29
+00:02:38,300 --> 00:02:41,810
+From then on, the news comes to you.
+
+30
+00:02:41,860 --> 00:02:47,391
+A new fatal accident, from the FAA's notice or from NTSB.
+
+31
+00:02:47,441 --> 00:02:50,277
+A new case in a type you fly.
+
+32
+00:02:50,327 --> 00:02:55,666
+And when a case you're watching in section two changes:
+
+33
+00:02:55,716 --> 00:03:01,250
+a preliminary report, a factual report, a probable cause.
+
+34
+00:03:02,800 --> 00:03:09,900
+Every ping has a one-click stop link, and nothing goes out until you confirm your address.
+
+35
+00:03:11,467 --> 00:03:18,045
+Learning from accidents is one of the best safety habits we can develop as pilots.
+
+36
+00:03:18,095 --> 00:03:22,198
+This app simply makes it active instead of passive.
+
+37
+00:03:22,248 --> 00:03:23,017
+Fly safe.
+

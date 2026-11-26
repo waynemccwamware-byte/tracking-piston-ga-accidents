@@ -1,0 +1,17 @@
+Get pinged, by email, when a serious accident happens in a type like the one you fly. Tracking Piston GA Accidents is a free GeezerGeek Pilot app that lists US piston airplane accidents as NTSB posts them (and earlier, from the FAA's preliminary notices), and emails you about the ones you care about.
+
+Open GeezerGeek Pilot Apps and pick Tracking Piston GA Accidents (Safety Stats):
+https://geezer-geek-pilot-control-panel.netlify.app/
+
+Chapters
+0:00 Passive vs. active
+0:44 The app
+1:06 Key stats
+1:20 Recent accidents and PRELIM entries
+2:00 Set up your alerts
+2:37 What the pings look like
+3:10 Wrap-up
+
+Accident data: NTSB (Public API) and the FAA's Preliminary Accident and Incident Notices. Preliminary information is subject to change; NTSB's final report is the record. The accident list shown was captured 26-Nov-2026; the email addresses and the inbox shown are demo stand-ins, and the phone graphics use made-up, masked tail numbers.
+
+Music: "Acoustic Guitar 1" by Audionautix is licensed under a Creative Commons Attribution 4.0 license. https://creativecommons.org/licenses/by/4.0/
