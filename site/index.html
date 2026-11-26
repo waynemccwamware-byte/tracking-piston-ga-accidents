@@ -375,7 +375,7 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.22</span>
+    <span class="ver mono">v0.23</span>
   </div>
   <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
   <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
@@ -531,6 +531,8 @@ const sevOf = c => c.fatal ? 'fatal' : c.serious ? 'serious' : c.minor ? 'minor'
 const injText = c => c.fatal ? `${c.fatal} fatal` : c.serious ? `${c.serious} serious` : c.minor ? `${c.minor} minor` : c.highest ? 'No injuries' : 'Injuries not yet stated by NTSB';
 const pdf = c => c.mkey ? `https://data.ntsb.gov/carol-repgen/api/Aviation/ReportMain/GenerateNewestReport/${c.mkey}/pdf` : '';
 const reg = t => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${encodeURIComponent(t)}`;
+// FAA's Detailed Report list (the dashboard's second view, with the search box), loaded on its own 26-Nov-2026
+const FAA_DETAIL = 'https://explore.dot.gov/t/FAA/views/PrelimininaryAccidentandIncidentReportData/DetailedNotices?:embed=y&:toolbar=bottom';
 const caseUrl = c => `https://web.ntsb.gov/investigations/?ntsbnumber=${encodeURIComponent(c.ntsb)}`;
 // newest NTSB report, once there is one past the initial notice: final when the case is completed, else by publish profile
 const reportLabel = c => !c.mkey ? '' : (c.status === 'Completed' || /final/i.test(c.profile || '')) ? 'NTSB final report (PDF)'
@@ -711,7 +713,7 @@ function prelimRow(c) {
   const links = [
     // v0.22: FAA's notice has no address of its own (one Tableau view, notice chosen in-session; checked 26-Nov-2026), so the link
     // opens FAA's page and copies the N-number for its search box (Wayne: open the page, enter the tail number, Enter)
-    c.src === 'FAA' ? `<a href="${esc(c.srcUrl || 'https://www.faa.gov/data_research/accident_incident/preliminary_data')}" target="_blank" rel="noopener" data-copytail="${esc(c.reg)}" title="Opens FAA's notices page; ${esc(c.reg)} is copied, paste it into SEARCH TEXT and press Enter">FAA notice (search ${esc(c.reg)})</a>`
+    c.src === 'FAA' ? `<a href="${FAA_DETAIL}" target="_blank" rel="noopener" data-copytail="${esc(c.reg)}" title="Opens FAA's Detailed Report list; ${esc(c.reg)} is copied: paste it into SEARCH TEXT, press Enter, then VIEW REPORT">FAA notice (search ${esc(c.reg)})</a>`
       : c.srcUrl ? `<a href="${esc(c.srcUrl)}" target="_blank" rel="noopener">Source</a>` : '',
     c.reg ? `<a href="${reg(c.reg)}" target="_blank" rel="noopener">FAA Registry</a>` : '',
   ].filter(Boolean).join('');
