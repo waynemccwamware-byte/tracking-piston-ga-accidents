@@ -145,12 +145,14 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = 
     }
     state.prelimSeeded = true;
     state.faaFailSince = null;
+    state.faaLastOk = started;   // v0.39: shown on the page in gray
     status.counts.faa = `${ns.length} notices, ${kept} piston accidents`;
   } catch (e) {
     // v0.27: FAA refuses now and then; prelim entries already listed are kept. Flag it only after 3 hours of failures.
     state.faaFailSince = state.faaFailSince || started;
     status.counts.faa = 'not read this time: ' + e.message;
-    if (Date.parse(started) - Date.parse(state.faaFailSince) >= 3 * 3600e3) errs.push(`FAA notices (failing since ${fmtDate(state.faaFailSince.slice(0, 10))} ${state.faaFailSince.slice(11, 16)} UTC): ${e.message}`);
+    // v0.39 (Wayne, 27-Nov-2026): FAA refusals no longer count as a problem on the page; the page shows the last
+    // successful FAA read in gray instead. The error stays in status.counts.faa and the function log for us.
   }
   status.error = errs.join('; ');
   // re-apply the piston test to stored cases, so a tightened rule also clears earlier entries
