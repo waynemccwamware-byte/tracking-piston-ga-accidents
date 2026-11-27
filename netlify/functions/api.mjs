@@ -107,7 +107,7 @@ export default async (req, context) => {
         addrs.add(String(p.email).trim().toLowerCase());
       }
       return json(200, { subscribers: addrs.size, asOf: new Date().toISOString() },
-        { 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' });
+        { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });   // v0.41: always current (Open Counts reads it on every visit)
     }
 
     if (op === 'tail') {
