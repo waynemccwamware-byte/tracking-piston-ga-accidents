@@ -249,7 +249,7 @@ export async function sendEmail(to, { title, body, click = '', unsub = '' }) {
   if (!key) return { ok: false, status: 0, why: 'Email sending is not set up on the server yet (RESEND_API_KEY).' };
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(to || '')) return { ok: false, status: 0, why: 'No valid email address in the profile.' };
   const text = String(body || '') + (click ? `\n\nOpen in the app: ${click}` : '') +
-    `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change these emails in section 3 of ${APP_URL}` +
+    `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change these emails in Pings (section 1) of ${APP_URL}` +
     (unsub ? `\nStop all emails with one click: ${unsub}` : '');
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',

@@ -146,11 +146,11 @@ export default async (req, context) => {
     if (op === 'confirm' || op === 'unsub') {
       const c = String(url.searchParams.get('code') || '').toUpperCase(), t = String(url.searchParams.get('t') || '');
       const q = CODE_RE.test(c) ? await B.get('user/' + c) : null;
-      if (!q || !q.etoken || t !== q.etoken) return page('Link not valid', 'This link has expired or was replaced by a newer one. Open the app and use section 3.');
+      if (!q || !q.etoken || t !== q.etoken) return page('Link not valid', 'This link has expired or was replaced by a newer one. Open the app and use the Pings section.');
       if (op === 'confirm') { q.emailVerified = true; q.emailOn = true; await B.set('user/' + c, q);
         return page('Email confirmed', `Pings for this alert profile will go to ${q.email.replace(/</g, '')}.`); }
       q.emailOn = false; await B.set('user/' + c, q);
-      return page('Emails stopped', 'This alert profile will not send any more emails. You can turn them back on in section 3 of the app.');
+      return page('Emails stopped', 'This alert profile will not send any more emails. You can turn them back on in the Pings section of the app.');
     }
 
     const code = String(url.searchParams.get('code') || '').toUpperCase();

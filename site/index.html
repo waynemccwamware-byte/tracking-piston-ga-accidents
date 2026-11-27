@@ -67,6 +67,20 @@ body{
 .purpose-label{ color:var(--text-primary); }
 .xlink{ display:flex; justify-content:flex-end; margin:-4px 4px 10px; }
 .xbtn{ padding:7px 12px; font-size:12.5px; display:inline-block; text-decoration:none; }   /* same as GA Accident Stats' .tail-top button */
+/* v0.38 (Wayne, 27-Nov-2026): pings up front. Inverted amber strip like Mexican Airstrips' .web-note; GA Accident
+   Stats becomes a plain link; the Pings section is section 1 with a thin amber border. */
+.ping-strip{ display:flex; justify-content:space-between; align-items:center; gap:8px 12px; flex-wrap:wrap; margin:0 4px 8px; padding:9px 12px; border-radius:8px; background:var(--amber); color:#1a1200; font-size:13px; line-height:1.4; text-decoration:none; font-weight:500; }
+.ping-strip:hover{ filter:brightness(1.07); }
+.ping-strip .ps-go{ font-weight:600; white-space:nowrap; }
+.xtext{ font-size:12px; color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(63,167,160,.35); }
+.xtext:hover{ color:var(--amber); border-bottom-color:var(--amber); }
+.step.ping-sec{ border-color:var(--amber-dim); }
+.sample{ border:1px dashed var(--bezel-hi); border-radius:6px; padding:8px 10px; margin:6px 0 10px; background:#0d1117; }
+.sample .sh{ font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.sample .ss{ font-size:12.5px; font-weight:600; color:var(--text-primary); }
+.sample pre{ margin:4px 0 0; font:11.5px/1.5 'IBM Plex Mono',monospace; color:var(--text-primary); white-space:pre-wrap; }
+.wnudge{ font-size:11.5px; color:var(--text-muted); margin-top:6px; }
+.wnudge a{ color:var(--amber); }
 
 .panel{ background:var(--bg-panel); border:1px solid var(--bezel); border-radius:10px; padding:12px; }
 .step{ border:1px solid var(--bezel); border-radius:8px; padding:12px; margin-bottom:12px; background:rgba(16,20,26,0.35); }
@@ -150,7 +164,7 @@ input.mono{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; }
 .ks-chart svg text{ font:9px 'IBM Plex Mono',monospace; fill:var(--text-muted); }
 .kc-leg{ font-size:10.5px; color:var(--text-muted); line-height:1.35; }
 .kc-wait{ font-size:11px; color:var(--text-muted); }
-/* v0.35–v0.36: the key stats' and section 1's notes start closed on every device (Wayne, 26-Nov-2026) */
+/* v0.35–v0.36: the key stats' and Recent accidents' notes start closed on every device (Wayne, 26-Nov-2026) */
 .ks-more{ margin-top:6px; }
 .ks-more summary{ font-size:11.5px; color:var(--text-muted); cursor:pointer; list-style:none; display:inline-flex; align-items:center; gap:5px; }
 .ks-more summary::-webkit-details-marker{ display:none; }
@@ -399,10 +413,11 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
 <div class="rig">
   <div class="title-row">
     <h1>Tracking Piston GA Accidents</h1>
-    <span class="ver mono">v0.37</span>
+    <span class="ver mono">v0.38</span>
   </div>
-  <p class="purpose-line"><span class="purpose-label">Purpose:</span> New US piston fixed-wing accidents as NTSB posts them, a ping on fatal accidents, and watches that ping you when a case you care about gets new information or a report.</p>
-  <div class="xlink"><a class="btn primary xbtn" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
+  <p class="purpose-line"><span class="purpose-label">Purpose:</span> Email pings when a US piston fatal accident is posted, and when a case you're watching gets a new report. Plus the year's numbers and the full list.</p>
+  <a class="ping-strip" href="#secPings" id="pingStrip"><span id="pingStripTxt">Get an email when a fatal piston accident is posted</span><span class="ps-go" id="pingStripGo">Set up pings →</span></a>
+  <div class="xlink"><a class="xtext" href="https://piston-ga-stats.netlify.app/" id="statsLink">Accident statistics by type in GA Accident Stats →</a></div>
 
   <div class="panel">
 
@@ -430,60 +445,13 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
       <details class="ks-more"><summary>How these are counted</summary><div class="ks-f" id="ksFoot"></div></details>
     </section>
 
-    <section class="step" id="secList">
-      <h2><span class="num">1</span> Recent accidents <span class="sub" id="sinceSub"></span></h2>
-      <details class="ks-more" style="margin:-2px 0 8px"><summary>About this list</summary><p class="note" style="margin:6px 0 0">Calendar years: the list keeps this year and last (never before 01-Jan-2026), and each 01-Jan the oldest year drops off. Pick the year above the key stats. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens; until then, accidents from the FAA's next-day notices show with a <span class="pl" style="margin-left:0">PRELIM</span> badge.</p></details>
-      <p class="status" id="status">Loading…</p>
-      <div class="ctls">
-        <div class="seg" id="sevSeg" role="group" aria-label="Severity">
-          <button type="button" data-v="all" aria-pressed="false">All</button>
-          <button type="button" data-v="fatal" aria-pressed="true">Fatal</button>
-          <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
-        </div>
-        <button type="button" class="pick-btn" id="famBtn" aria-expanded="false"><span class="pv" id="famSum">All types</span><span class="caret">▾</span></button>
-        <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
-      </div>
-      <div id="famPanel" hidden></div>
-      <div class="list" id="list"></div>
-      <div class="more" id="moreWrap" hidden><button class="btn sm" id="moreBtn" type="button">Show more</button></div>
-      <details id="plAdd" hidden style="margin-top:10px">
-        <summary class="note" style="cursor:pointer">Add a prelim entry (admin only)</summary>
-        <p class="note">For an accident that's in the news or on ASN but not yet in the FAA's notices or NTSB's data. It shows with a PRELIM badge, a fatal one pings at the next hourly check, and it drops out when NTSB lists a case for the same N-number within 3 days of this date.</p>
-        <div class="ctls">
-          <input type="text" class="mono" id="plReg" placeholder="N-number" style="width:110px" aria-label="N-number">
-          <input type="date" id="plDate" aria-label="Event date">
-          <input type="text" id="plMake" placeholder="Make (e.g. Cirrus)" style="width:140px" aria-label="Make">
-          <input type="text" id="plModel" placeholder="Model (e.g. SR22T)" style="width:130px" aria-label="Model">
-          <input type="text" id="plCity" placeholder="City" style="width:130px" aria-label="City">
-          <select id="plSt" aria-label="State"></select>
-          <label class="ck"><input type="checkbox" id="plFatal"> Fatal</label>
-          <input type="url" id="plUrl" placeholder="Source link (https://…)" style="flex:1 1 220px" aria-label="Source link">
-          <button class="btn sm primary" id="plSave" type="button">Add</button>
-        </div>
-      </details>
-    </section>
-
-    <section class="step" id="secWatch">
-      <h2><span class="num">2</span> Watch list <span class="sub">cases and N-numbers you follow</span></h2>
-      <p class="note" id="watchMode"></p>
-      <div id="watchArea">
-        <div class="ctls">
-          <input type="text" class="mono" id="wTail" placeholder="N-number, e.g. N211WP" style="flex:1 1 160px" aria-label="N-number to look up">
-          <button class="btn sm primary" id="wLook" type="button">Look up</button>
-        </div>
-        <p class="note">Watch a whole N-number (any new or changed NTSB case for that aircraft) or one case from its list. You can also tap <b>☆ Watch</b> on any accident in section 1.</p>
-        <div class="lk" id="lookOut"></div>
-        <div class="wl" id="wl"></div>
-        <div class="ctls" style="margin-top:6px"><button class="btn sm" id="wRefresh" type="button">Check NTSB now</button><span class="note" id="wAsOf" style="margin:0"></span></div>
-      </div>
-    </section>
-
-    <section class="step" id="secAlerts">
-      <h2><span class="num">3</span> Alerts <span class="sub">how and when you get pinged</span></h2>
+    <section class="step ping-sec" id="secPings">
+      <h2><span class="num">1</span> Pings <span class="sub">an email when it matters</span></h2>
+      <div class="sample" id="samplePing" hidden></div>
       <div id="noProfile">
-        <p class="note">An alert profile holds your ping settings and watch list. It's kept on the GeezerGeek server under a code, so you can use the same profile on your phone and computer.</p>
+        <p class="note">Pings go to your email: every fatal piston accident as NTSB or the FAA posts it, other accidents you choose, and any change on your watch list. Your ping settings and watch list are kept on the GeezerGeek server under a code, so you can use them on your phone and computer.</p>
         <div class="ctls">
-          <button class="btn primary" id="mkProfile" type="button">Set up my alerts</button>
+          <button class="btn primary" id="mkProfile" type="button">Set up my pings</button>
           <span class="note" style="margin:0">or use an existing code:</span>
           <input type="text" class="mono" id="codeIn" placeholder="XXXX-XXXX-XXXX" style="width:170px" aria-label="Profile code">
           <button class="btn sm" id="useCode" type="button">Use</button>
@@ -524,6 +492,54 @@ ol.steps a, .note a, .fine a{ color:var(--teal); }
         </div>
         <div class="msg" id="msg"></div>
         <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Recent pings for this profile</summary><ul class="log" id="log"></ul></details>
+      </div>
+    </section>
+
+    <section class="step" id="secList">
+      <h2><span class="num">2</span> Recent accidents <span class="sub" id="sinceSub"></span></h2>
+      <details class="ks-more" style="margin:-2px 0 8px"><summary>About this list</summary><p class="note" style="margin:6px 0 0">Calendar years: the list keeps this year and last (never before 01-Jan-2026), and each 01-Jan the oldest year drops off. Pick the year above the key stats. Newest accident first; tap an accident for its full record. NTSB usually lists a case several days after it happens; until then, accidents from the FAA's next-day notices show with a <span class="pl" style="margin-left:0">PRELIM</span> badge.</p></details>
+      <p class="status" id="status">Loading…</p>
+      <div class="ctls">
+        <div class="seg" id="sevSeg" role="group" aria-label="Severity">
+          <button type="button" data-v="all" aria-pressed="false">All</button>
+          <button type="button" data-v="fatal" aria-pressed="true">Fatal</button>
+          <button type="button" data-v="serious" aria-pressed="false">Serious or fatal</button>
+        </div>
+        <button type="button" class="pick-btn" id="famBtn" aria-expanded="false"><span class="pv" id="famSum">All types</span><span class="caret">▾</span></button>
+        <input type="text" id="q" placeholder="Search N-number, city, model" aria-label="Search" style="flex:1 1 160px">
+      </div>
+      <div id="famPanel" hidden></div>
+      <div class="list" id="list"></div>
+      <div class="more" id="moreWrap" hidden><button class="btn sm" id="moreBtn" type="button">Show more</button></div>
+      <details id="plAdd" hidden style="margin-top:10px">
+        <summary class="note" style="cursor:pointer">Add a prelim entry (admin only)</summary>
+        <p class="note">For an accident that's in the news or on ASN but not yet in the FAA's notices or NTSB's data. It shows with a PRELIM badge, a fatal one pings at the next hourly check, and it drops out when NTSB lists a case for the same N-number within 3 days of this date.</p>
+        <div class="ctls">
+          <input type="text" class="mono" id="plReg" placeholder="N-number" style="width:110px" aria-label="N-number">
+          <input type="date" id="plDate" aria-label="Event date">
+          <input type="text" id="plMake" placeholder="Make (e.g. Cirrus)" style="width:140px" aria-label="Make">
+          <input type="text" id="plModel" placeholder="Model (e.g. SR22T)" style="width:130px" aria-label="Model">
+          <input type="text" id="plCity" placeholder="City" style="width:130px" aria-label="City">
+          <select id="plSt" aria-label="State"></select>
+          <label class="ck"><input type="checkbox" id="plFatal"> Fatal</label>
+          <input type="url" id="plUrl" placeholder="Source link (https://…)" style="flex:1 1 220px" aria-label="Source link">
+          <button class="btn sm primary" id="plSave" type="button">Add</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="step" id="secWatch">
+      <h2><span class="num">3</span> Watch list <span class="sub">cases and N-numbers you follow</span></h2>
+      <p class="note" id="watchMode"></p>
+      <div id="watchArea">
+        <div class="ctls">
+          <input type="text" class="mono" id="wTail" placeholder="N-number, e.g. N211WP" style="flex:1 1 160px" aria-label="N-number to look up">
+          <button class="btn sm primary" id="wLook" type="button">Look up</button>
+        </div>
+        <p class="note">Watch a whole N-number (any new or changed NTSB case for that aircraft) or one case from its list. You can also tap <b>☆ Watch</b> on any accident in section 2.</p>
+        <div class="lk" id="lookOut"></div>
+        <div class="wl" id="wl"></div>
+        <div class="ctls" style="margin-top:6px"><button class="btn sm" id="wRefresh" type="button">Check NTSB now</button><span class="note" id="wAsOf" style="margin:0"></span></div>
       </div>
     </section>
 
@@ -583,12 +599,39 @@ const saved0 = (() => { try { return JSON.parse(LS.get('tpga-filters2') || '{}')
 const st = { cases: [], prelims: [], sev: saved0.sev || 'fatal',   // v0.13: Fatal by default (Wayne, 25-Nov-2026)
   fams: Array.isArray(saved0.fams) ? saved0.fams : [], 
   view: 'short',   // v0.6: rows always start closed; tap one to open it (Wayne, 25-Nov-2026)
-  q: '', shown: 20, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
+  q: '', shown: 5, open: new Set(), focus: new URLSearchParams(location.search).get('case') || '' };
 const OTHER = 'Other types (homebuilts, Maule, Pitts…)';
 // v0.17: State filter dropped (Wayne, 25-Nov-2026)
 const keepFilters = () => LS.set('tpga-filters2', JSON.stringify({ sev: st.sev, fams: st.fams }));
 const famOf = c => c.fam || OTHER;
-let P = null;   // alert profile
+let P = null;   // ping profile (the server calls it an alert profile)
+// v0.38: pings are on when this device has a profile with a confirmed email turned on
+const pingsOn = () => !!(P && P.email && P.emailOn && P.emailVerified !== false);
+const NUDGE = `<div class="wnudge">Watching on this device. <a href="#secPings">Add your email in Pings</a> to get an email when it changes.</div>`;
+const maskEmail = e => { const [u, d] = String(e || '').split('@'); return d ? `${u.slice(0, 1)}…@${d}` : ''; };
+// The amber strip says what you'd get, or what you're getting (Wayne, 27-Nov-2026)
+function drawStrip() {
+  let txt, go;
+  if (!P) { txt = 'Get an email when a fatal piston accident is posted'; go = 'Set up pings →'; }
+  else if (!P.email || !P.emailOn) { txt = 'Your pings have no email address yet'; go = 'Add email →'; }
+  else if (P.emailVerified === false) { txt = `Confirm ${maskEmail(P.email)} to start your pings: check your email for the link`; go = 'Pings →'; }
+  else {
+    const n = (P.watches || []).length, what = [P.rules && P.rules.fatal !== false ? 'every fatal accident' : '', P.rules && P.rules.newOn ? 'other matches' : '', n ? `${n} watch${n === 1 ? '' : 'es'}` : ''].filter(Boolean);
+    txt = `Pinging ${maskEmail(P.email)}: ${what.join(' + ') || 'nothing selected yet'}`; go = 'Change →';
+  }
+  $('pingStripTxt').textContent = txt; $('pingStripGo').textContent = go;
+}
+// What a ping looks like (v0.38): the newest NTSB fatal accident in the list, in the same words the email uses
+// (netlify/lib/poll-core.mjs: subject "FATAL: make model N-number", then caseLine, injuries + damage, NTSB number)
+function drawSample() {
+  const el = $('samplePing');
+  const c = st.cases.find(x => x.fatal > 0 && (!x.type || /accident/i.test(x.type)));
+  if (!c || P) { el.hidden = true; return; }
+  const line1 = `${dmy(c.date)} ${c.reg} ${c.make} ${c.model}, ${c.city}${c.st ? ', ' + c.st : ''}`;
+  el.innerHTML = `<div class="sh">What a ping looks like (the latest one):</div><div class="ss">FATAL: ${esc(c.make)} ${esc(c.model)} ${esc(c.reg)}</div>`
+    + `<pre>${esc(line1)}\n${esc(c.fatal + ' fatal' + (c.damage ? ', ' + c.damage.toLowerCase() + ' damage' : ''))}\nNTSB ${esc(c.ntsb)}\n\nOpen in the app: …?case=${esc(c.ntsb)}</pre>`;
+  el.hidden = false;
+}
 
 // ------------------------------------------------------------ feed
 async function loadFeed(bust) {
@@ -606,6 +649,7 @@ async function loadFeed(bust) {
     if (!d.asOf && !st.cases.length) line = 'No accidents gathered yet: the first server check hasn\'t run.';
     $('status').innerHTML = line;
     fillSelects();
+    drawSample();
     keyStats(d);
     render();
     if (st.focus) { st.open.add(st.focus); st.open.delete('-' + st.focus); }
@@ -637,7 +681,7 @@ function keyStats(d) {
 }
 $('yearSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  st.year = +b.dataset.y; st.shown = 20;
+  st.year = +b.dataset.y; st.shown = 5;
   [...$('yearSeg').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.y === st.year));
   drawStats(); render();
 });
@@ -773,6 +817,7 @@ function render() {
       ${c.pc ? `<div class="pc"><b>NTSB probable cause:</b> ${esc(c.pc)}</div>` : ''}
       ${histDiv(c)}
       <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button><button class="watch-btn" type="button" data-case="${esc(c.ntsb)}" data-tail="${esc(c.reg)}" aria-pressed="${w}">${w ? '★ Watching' : '☆ Watch'}</button></div>
+      ${w && !pingsOn() ? NUDGE : ''}
     </div>`;
   });
   $('list').innerHTML = rows.join('') || '<div class="empty">No accidents match.</div>';
@@ -830,12 +875,13 @@ function prelimRow(c) {
     <div class="acc-meta"><span class="prelim-note">${src}. NTSB hasn't listed this accident yet; preliminary and subject to change.</span>${c.fam && c.fam !== c.model ? '<br>' + esc(c.fam) : ''}</div>
     ${histDiv(c)}
     <div class="acc-links">${links}<button class="watch-btn" type="button" data-close="${esc(c.ntsb)}">▴ Close</button>${P && P.owner ? `<button class="watch-btn" type="button" data-pldel="${esc(c.ntsb)}">Remove entry</button>` : ''}<button class="watch-btn" type="button" data-wtail="${esc(c.reg)}" aria-pressed="${tw}">${tw ? '★ Watching ' + esc(c.reg) : '☆ Watch ' + esc(c.reg)}</button></div>
+    ${tw && !pingsOn() ? NUDGE : ''}
   </div>`;
 }
 
 $('sevSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  st.sev = b.dataset.v; st.shown = 20; keepFilters(); syncSegs(); render();
+  st.sev = b.dataset.v; st.shown = 5; keepFilters(); syncSegs(); render();
 });
 
 function syncSegs() {
@@ -889,11 +935,11 @@ function makePicker({ btn, panel, sum, get, set, counts, anyLabel, note, emptyFo
 }
 const listPick = makePicker({ btn: 'famBtn', panel: 'famPanel', sum: 'famSum', get: () => st.fams, set: v => { st.fams = v; },
   counts: true, anyLabel: 'All types', note: 'grey numbers: accidents in this list', emptyFoot: 'All types shown.',
-  after: () => { st.shown = 20; keepFilters(); render(); } });
+  after: () => { st.shown = 5; keepFilters(); render(); } });
 const rulePick = makePicker({ btn: 'rFamBtn', panel: 'rFamPanel', sum: 'rFamSum', get: () => (P ? P.rules.fams : []), set: v => { if (P) P.rules.fams = v; },
   counts: false, anyLabel: 'Any type', note: 'press Save to keep them', emptyFoot: 'Any type pings.', after: () => {} });
-$('q').oninput = e => { st.q = e.target.value; st.shown = 20; render(); };
-$('moreBtn').onclick = () => { st.shown += 20; render(); };
+$('q').oninput = e => { st.q = e.target.value; st.shown = 5; render(); };
+$('moreBtn').onclick = () => { st.shown += 20; render(); };   // v0.38: 5 at first, then 20 more a tap
 $('list').addEventListener('click', async e => {
   const cp = e.target.closest('a[data-copytail]');
   if (cp) { try { navigator.clipboard.writeText(cp.dataset.copytail); } catch (err) { /* the link still opens */ } return; }
@@ -928,6 +974,7 @@ function flash(t, bad) { const m = $('msg'); m.textContent = t; m.className = 'm
 
 function showProfile() {
   $('noProfile').hidden = !!P; $('hasProfile').hidden = !P;
+  drawStrip(); drawSample();
   if (!P) $('plAdd').hidden = true;
   drawWatches();
   if (!P) return;
@@ -965,7 +1012,7 @@ const keepWL = () => LS.set('tpga-watches', JSON.stringify(WL));
 const forServer = () => WL.map(w => ({ kind: w.kind, id: w.id, tail: w.tail }));
 
 async function watchesChanged() {
-  keepWL(); drawWatches(); render();
+  keepWL(); drawWatches(); render(); drawStrip();
   WL.forEach(w => { if (!LIVE.has(wkey(w))) checkWatch(w); });
   if (P) await saveProfile({ watches: forServer() }, true);
 }
@@ -985,8 +1032,8 @@ async function checkWatch(w) {
 }
 function drawWatches() {
   $('watchMode').innerHTML = P
-    ? 'Kept on this device and in your alert profile: you can check it here any time, and the server checks it every hour and <b>pings you when something changes</b>.'
-    : 'Watching is free and needs no setup: the list is kept on this device and shows what NTSB has now, marked <b>New</b> when it changed since you last looked. To be <b>pinged</b> when something changes, set up alerts in section 3.';
+    ? 'Kept on this device and in your ping profile: you can check it here any time, and the server checks it every hour and <b>pings you when something changes</b>.'
+    : 'Watching is free and needs no setup: the list is kept on this device and shows what NTSB has now, marked <b>New</b> when it changed since you last looked. To be <b>pinged</b> when something changes, <a href="#secPings" style="color:var(--amber)">set up pings in section 1</a>.';
   $('wl').innerHTML = WL.map((w, i) => {
     const L = LIVE.get(wkey(w)) || {};
     const isNew = L.fp != null && w.seenFp != null && L.fp !== w.seenFp;
@@ -1074,7 +1121,7 @@ async function saveProfile(part, quiet) {
 }
 $('mkProfile').onclick = async () => {
   $('mkProfile').disabled = true;
-  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile(); flash('Alert profile made. Add your email in section 3, Save, then send a test.'); }
+  try { const r = await fetch(API + '?op=profile-new', { method: 'POST' }); P = await r.json(); if (!r.ok) throw new Error(P.error); LS.set('tpga-code', P.code); showProfile(); await mergeWithProfile(); flash('Ping profile made. Add your email above, Save, then send a test.'); }
   catch (e) { P = null; alert('Couldn\'t make a profile: ' + e.message); }
   $('mkProfile').disabled = false;
 };
