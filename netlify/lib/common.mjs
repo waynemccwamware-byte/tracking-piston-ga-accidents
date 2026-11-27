@@ -244,17 +244,18 @@ export const unsubUrl = p => p.etoken ? apiUrl({ op: 'unsub', code: p.code, t: p
 export const page = (title, msg) => new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
 <style>body{margin:0;padding:40px 16px;background:#10141a;color:#e7e4dc;font:15px/1.5 -apple-system,system-ui,sans-serif}main{max-width:520px;margin:0 auto}h1{font-size:19px}a{color:#f5a623}</style></head>
 <body><main><h1>${title}</h1><p>${msg}</p><p><a href="${APP_URL}">Open Tracking Piston GA Accidents</a></p></main></body></html>`, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
-export async function sendEmail(to, { title, body, click = '', unsub = '' }) {
+// v0.40: a ping passes its own full `text` and `html` (ping-email.mjs); other emails pass `body` and get the footer added
+export async function sendEmail(to, { title, body, click = '', unsub = '', text: fullText = '', html = '' }) {
   const key = env('RESEND_API_KEY');
   if (!key) return { ok: false, status: 0, why: 'Email sending is not set up on the server yet (RESEND_API_KEY).' };
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,}$/.test(to || '')) return { ok: false, status: 0, why: 'No valid email address in the profile.' };
-  const text = String(body || '') + (click ? `\n\nOpen in the app: ${click}` : '') +
+  const text = fullText || String(body || '') + (click ? `\n\nOpen in the app: ${click}` : '') +
     `\n\n--\nTracking Piston GA Accidents (GeezerGeek Pilot). Change these emails in Pings (section 1) of ${APP_URL}` +
     (unsub ? `\nStop all emails with one click: ${unsub}` : '');
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env('PING_FROM') || 'Tracking Piston GA Accidents <pings@alerts.wamware.com>', to: [to], subject: String(title || '').slice(0, 200), text }),
+    body: JSON.stringify({ from: env('PING_FROM') || 'Tracking Piston GA Accidents <pings@alerts.wamware.com>', to: [to], subject: String(title || '').slice(0, 200), text, ...(html ? { html } : {}) }),
   });
   let why = '';
   if (!r.ok) { try { why = (await r.json()).message || ''; } catch (e) { /* ignore */ } }

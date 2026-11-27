@@ -14,6 +14,7 @@ import {
   sendEmail, unsubUrl, CAP_DAY_ALL, CAP_DAY_PROFILE, caseLine, injuryText, reportPdf, fmtDate, tailKey, family,
 } from './common.mjs';
 import { fetchFaaNotices, FAA_NOT_PISTON, FAA_PAGE, prelimId } from './faa-prelim.mjs';
+import { buildPing } from './ping-email.mjs';
 
 // v0.16 prelim entries: FAA preliminary notices (and Wayne's manual ones) for accidents NTSB hasn't listed yet.
 // Shown with a PRELIM badge, left out of the key stats and trend, and dropped once NTSB lists a case with the
@@ -204,28 +205,29 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = 
   const dayKey = started.slice(0, 10);
   const sends = (await B.get('sends')) || {};
   if (sends.day !== dayKey) { sends.day = dayKey; sends.n = 0; }
-  const send = async (p, msg) => {
-    const line = msg.title + ' — ' + msg.body.split('\n')[0];
+  // v0.40: one email per check per profile, listing every item (ping-email.mjs builds it); each item is logged
+  const logLine = it => it.kind === 'prelim' ? `FATAL (prelim): ${it.pr.make} ${it.pr.model} ${it.pr.reg} — ${prelimLine(it.pr)}`
+    : it.kind === 'watch' ? `Watch ${it.w.kind === 'tail' ? it.w.tail : it.w.id}: ${it.what[0]} — ${caseLine(it.c)}`
+    : `${it.c.fatal > 0 ? 'FATAL' : 'New accident'}: ${it.c.make} ${it.c.model} ${it.c.reg} — ${caseLine(it.c)}`;
+  const send = async (p, items) => {
+    if (!items.length) return;
+    const lines = items.map(logLine);
+    const log = pre => { p.log = [...lines.map(t => ({ at: started, text: pre + t })), ...(p.log || [])].slice(0, 60); };
     // only confirmed addresses (profiles from before v0.11 have no emailVerified field and count as confirmed)
-    if (silent || !(p.email && p.emailOn) || p.emailVerified === false) { p.log = [{ at: started, text: line }, ...(p.log || [])].slice(0, 60); return; }
+    if (silent || !(p.email && p.emailOn) || p.emailVerified === false) { log(''); return; }
     if (p.sentDay !== dayKey) { p.sentDay = dayKey; p.sentN = 0; }
-    if (p.sentN >= CAP_DAY_PROFILE || sends.n >= CAP_DAY_ALL) {
-      p.log = [{ at: started, text: 'Not emailed (daily limit reached): ' + line }, ...(p.log || [])].slice(0, 60); return;
-    }
-    p.log = [{ at: started, text: line }, ...(p.log || [])].slice(0, 60);
-    try { const r = await sendEmail(p.email, { ...msg, unsub: unsubUrl(p) }); if (r.ok) { sent++; p.sentN++; sends.n++; } } catch (e) { /* keep going */ }
+    if (p.sentN >= CAP_DAY_PROFILE || sends.n >= CAP_DAY_ALL) { log('Not emailed (daily limit reached): '); return; }
+    log('');
+    try { const r = await sendEmail(p.email, buildPing(items, { unsub: unsubUrl(p) })); if (r.ok) { sent++; p.sentN++; sends.n++; } } catch (e) { /* keep going */ }
   };
 
   for (const p of profiles) {
     let dirty = false;
+    const items = [];
     if (!seeding) {
       for (const pr of freshPrelims) {
         if (p.rules?.fatal !== false || matchesRules({ fatal: 1, fam: pr.fam, st: pr.st }, p.rules)) {
-          await send(p, {
-            title: `FATAL (prelim): ${pr.make} ${pr.model} ${pr.reg}`,
-            body: `${prelimLine(pr)}\n${pr.src === 'FAA' ? 'FAA preliminary notice' + (pr.entered ? ' entered ' + fmtDate(pr.entered) : '') : 'Prelim entry'}; NTSB hasn't listed it yet. Preliminary and subject to change.`,
-            click: APP_URL + '?case=' + encodeURIComponent(pr.id),
-          });
+          items.push({ kind: 'prelim', pr });
           dirty = true;
         }
       }
@@ -233,12 +235,7 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = 
         if (pingedViaPrelim.has(c.ntsb)) continue;
         const isFatal = c.fatal > 0;
         if ((isFatal && p.rules?.fatal !== false) || matchesRules(c, p.rules)) {
-          await send(p, {
-            title: (isFatal ? 'FATAL: ' : 'New accident: ') + `${c.make} ${c.model} ${c.reg}`,
-            body: `${caseLine(c)}\n${injuryText(c)}${c.damage ? ', ' + c.damage.toLowerCase() + ' damage' : ''}\nNTSB ${c.ntsb}`,
-            priority: isFatal ? 5 : 3, tags: isFatal ? 'warning' : 'small_airplane',
-            click: APP_URL + '?case=' + encodeURIComponent(c.ntsb),
-          });
+          items.push({ kind: 'new', c });
           dirty = true;
         }
       }
@@ -258,11 +255,7 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = 
         if (old && old.fp === c.fp) continue;
         const what = describeChange(old && old.c, c);
         if (!firstLook && !silent && what.length) {
-          await send(p, {
-            title: `Watch ${w.kind === 'tail' ? w.tail : w.id}: ${what[0]}`,
-            body: `${caseLine(c)}\n${what.join('; ')}\nNTSB ${c.ntsb}${reportPdf(c) && c.status === 'Completed' ? '\nReport: ' + reportPdf(c) : ''}`,
-            priority: 4, tags: 'eyes', click: APP_URL + '?case=' + encodeURIComponent(c.ntsb),
-          });
+          items.push({ kind: 'watch', c, w, what });
         }
         w.fps[c.ntsb] = { fp: c.fp, c: { status: c.status, profile: c.profile, factual: c.factual, docket: c.docket, reportDate: c.reportDate, pc: c.pc || '', closed: c.closed, fatal: c.fatal, serious: c.serious, highest: c.highest } };
         dirty = true;
@@ -271,6 +264,10 @@ export async function runPoll(context, { silent = false, gapBudgetMs = 4000 } = 
       const latest = list.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
       if (latest) w.latest = { ntsb: latest.ntsb, date: latest.date, status: latest.status, reportDate: latest.reportDate, highest: injuryText(latest), mkey: latest.mkey, make: latest.make, model: latest.model };
     }
+    // a case that's both new and on a watched N-number is listed once, as new
+    const newIds = new Set(items.filter(i => i.kind === 'new').map(i => i.c.ntsb));
+    const one = items.filter(i => !(i.kind === 'watch' && newIds.has(i.c.ntsb)));
+    if (one.length) { await send(p, one); dirty = true; }
     if (dirty) await B.set('user/' + p.code, p);
   }
 

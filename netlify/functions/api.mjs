@@ -21,6 +21,7 @@
 
 import { blobs, json, page, apiUrl, unsubUrl, casesForTail, caseByNumber, slimCase, tailKey, sendEmail, emailReady, APP_URL, sinceNow, fmtDate } from '../lib/common.mjs';
 import { runPoll } from '../lib/poll-core.mjs';
+import { buildPing } from '../lib/ping-email.mjs';
 import { prelimId, stateCode } from '../lib/faa-prelim.mjs';
 import { family } from '../lib/common.mjs';
 
@@ -214,7 +215,10 @@ export default async (req, context) => {
 
     if (op === 'test' && req.method === 'POST') {
       if (p.emailVerified === false) return json(409, { ok: false, why: 'Confirm your address first: click the link in the email sent to ' + p.email + '.' });
-      const r = await sendEmail(p.email, {
+      // v0.40: the test ping is a real-looking ping for the newest fatal accident in the list
+      const st = await B.get('cases');
+      const c = Object.values((st && st.cases) || {}).filter(x => x.fatal > 0 && (!x.type || /accident/i.test(x.type))).sort((a, b) => b.date.localeCompare(a.date))[0];
+      const r = await sendEmail(p.email, c ? buildPing([{ kind: 'new', c }], { unsub: unsubUrl(p), test: true }) : {
         title: 'Test ping from Tracking Piston GA Accidents',
         body: 'If you can read this, pings for this alert profile reach you by email.',
         click: APP_URL, unsub: unsubUrl(p),
