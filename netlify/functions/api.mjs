@@ -5,7 +5,8 @@
 //   GET  ?op=profile&code=XXXX-XXXX-XXXX
 //   POST ?op=profile&code=…           save rules / email / watches (server keeps each watch's history)
 //   POST ?op=test&code=…              send a test ping
-//   GET  ?op=tail&q=N12345            NTSB cases for one N-number (for adding a watch)
+//   GET  ?op=subscribers              count of email subscribers only, no addresses (Open Counts page, v0.37)
+//   GET  ?op=tail&q=N12345           NTSB cases for one N-number (for adding a watch)
 //   GET  ?op=case&n=WPR27FA039        one NTSB case (watch list status)
 //   POST ?op=confirm-again&code=…   send the confirm-your-email link again
 //   GET  ?op=confirm&code=…&t=…      the link in that email: confirms the address (HTML page)
@@ -89,6 +90,23 @@ export default async (req, context) => {
         .sort((a, b) => b.date.localeCompare(a.date));
       return json(200, { since: sinceNow(), coveredFrom: state ? (state.coveredFrom || ((state.backfillTo || state.backfillDone) ? '2026-10-01' : null)) : null, asOf: state ? state.asOf : null, status: status || null, cases, prelims },
         { 'Cache-Control': 'public, max-age=60' });
+    }
+
+    // v0.37 (27-Nov-2026): public count of email subscribers for the Control Panel's Open Counts page.
+    // Only a number leaves the server, never an address. A subscriber = a distinct, confirmed address with
+    // email pings on and at least one thing that can ping (a rule or a watch). Wayne's own address counts.
+    if (op === 'subscribers') {
+      const codes = (await B.get('users')) || [];
+      const profiles = await Promise.all(codes.map(c => B.get('user/' + c).catch(() => null)));
+      const addrs = new Set();
+      for (const p of profiles) {
+        if (!p || !p.email || !p.emailOn || p.emailVerified === false) continue;
+        const r = p.rules || {};
+        if (!(r.fatal || r.newOn || (p.watches || []).length)) continue;
+        addrs.add(String(p.email).trim().toLowerCase());
+      }
+      return json(200, { subscribers: addrs.size, asOf: new Date().toISOString() },
+        { 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' });
     }
 
     if (op === 'tail') {
